@@ -1,0 +1,68 @@
+# End-to-End Azure Data Engineering Pipeline Architecture
+
+## Question
+Explain an end-to-end Azure Data Engineering pipeline that you have worked on.
+
+---
+
+## 1. Project Overview & Architecture (Medallion Architecture)
+
+The enterprise pipeline ingests data from heterogeneous sources (On-Premises SQL Databases, REST APIs, and Third-Party Cloud Applications), processes it using Azure Cloud services, and delivers cleansed analytical data models to Power BI and Downstream ML consumers.
+
+```
++------------------+       +-------------------+       +-----------------------+
+|  Source Systems  | ----> | Azure Data Factory| ----> | Azure Data Lake Gen2  |
+| - On-Prem SQL DB |  SHIR | (Orchestration &  |       | (Raw / Bronze Layer)  |
+| - REST APIs / CRM|       | Ingestion Copy)   |       +-----------------------+
++------------------+       +-------------------+                   |
+                                                                   v
++------------------+       +-------------------+       +-----------------------+
+| Consumption Layer| <---- | Azure Synapse /   | <---- | Azure Databricks      |
+| - Power BI       |       | Serverless SQL    | Delta | (Silver & Gold        |
+| - ML Models      |       | (Semantic Layer)  | Merge | Medallion Processing) |
++------------------+       +-------------------+       +-----------------------+
+         ^                                                         ^
+         |                                                         |
+         +---------------- Azure Key Vault (Secrets) --------------+
+         +------------- Azure Monitor & Log Analytics -------------+
+```
+
+---
+
+## 2. Component-by-Component Walkthrough
+
+### Phase 1: Ingestion & Orchestration (Azure Data Factory - ADF)
+- **Self-Hosted Integration Runtime (SHIR):** Securely connects to on-premises transactional databases without public IP exposure.
+- **Dynamic Metadata-Driven Pipelines:** A control table in Azure SQL stores table lists, source schemas, watermark columns, and load frequencies. ADF queries this metadata and loops via `ForEach` activity.
+- **Landing (Bronze) Storage:** Data is extracted incrementally and landed in **ADLS Gen2** in native raw JSON / Parquet format with ingestion timestamps (`ingestion_date=YYYY-MM-DD`).
+
+### Phase 2: Medallion Processing with Azure Databricks & Delta Lake
+Databricks orchestrates transformations across three curated Delta Lake layers:
+
+1. **Bronze Layer (Raw):**
+   - Ingests raw files using **Databricks Auto Loader** (`cloudFiles`) with schema inference and evolution.
+   - Preserves complete raw history with audit metadata (`_file_name`, `_load_timestamp`).
+
+2. **Silver Layer (Cleansed & Conformed):**
+   - Applies data quality constraints, drops duplicate records, handles `NULL` values, standardizes date formats, and validates schema types.
+   - Uses `MERGE INTO` (Upsert) to maintain Slowly Changing Dimensions (SCD Type 1 and Type 2) based on business keys.
+
+3. **Gold Layer (Aggregated & Business Dimensional Models):**
+   - Aggregates and joins domain tables into Star Schema models (Fact tables and Dimension tables).
+   - Optimizes data storage with **Liquid Clustering / Z-ORDER** on high-cardinality filter columns (`customer_id`, `transaction_date`).
+
+### Phase 3: Serving & Consumption Layer
+- **Azure Synapse Analytics / Databricks SQL Warehouses:** Exposes Gold Delta tables via external tables / SQL views for sub-second business reporting.
+- **Power BI:** Connects in **DirectLake** or **Import mode** to deliver executive sales, operations, and churn analytics dashboards.
+
+### Phase 4: Security, Governance & CI/CD
+- **Security & Secrets:** All database passwords, service principal keys, and connection strings are secured in **Azure Key Vault** and referenced via Secret Scopes.
+- **Governance:** **Microsoft Purview** maps data lineage across ADF pipelines, Databricks transformations, and Power BI dashboards.
+- **CI/CD:** Azure DevOps pipelines automatically validate ADF ARM templates and deploy Databricks notebooks / wheel packages across Dev, Test, and Prod environments.
+
+---
+
+## 3. Real-World Pipeline Metrics & Impact
+- **Volume:** Ingesting 250M+ records daily (~1.5 TB/day).
+- **SLA:** Reduced end-to-end latency from a legacy 14-hour batch window to a 45-minute incremental pipeline.
+- **Reliability:** Built automated retry policies, Dead-Letter Queues (DLQ) for malformed records, and Teams/Email alerts triggered via Azure Monitor webhook alerts.
