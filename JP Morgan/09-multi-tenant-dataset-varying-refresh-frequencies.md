@@ -1,0 +1,53 @@
+# Multi-Tenant Data Architecture with Varying Refresh Frequencies
+
+## Question
+Multiple downstream banking applications depend on the same core transaction dataset, but each has vastly different latency requirements:
+- **Fraud Detection:** Real-time / Streaming ($< 1\text{ second}$)
+- **Market Risk:** Intraday ($15\text{ minutes}$)
+- **Regulatory Reporting:** Daily Batch (EOD $24\text{ hours}$)
+
+How do you design a unified, cost-effective data architecture to serve all consumers from a single source of truth?
+
+---
+
+## 1. Unified Kappa / Medallion Architecture
+
+```
+                                [ Core Ingestion Stream: Kafka / Event Hubs ]
+                                                      │
+                                                      ▼
+                      ┌───────────────────────────────────────────────────────────────┐
+                      │ 🥉 Bronze Delta Table (Raw Append-Only Event Stream)           │
+                      └───────────────────────────────────────────────────────────────┘
+                                                      │
+                         ┌────────────────────────────┼────────────────────────────┐
+                         ▼                            ▼                            ▼
+                 [ Path 1: Real-Time ]       [ Path 2: Micro-Batch ]       [ Path 3: Batch EOD ]
+                  • Consumer: Fraud           • Consumer: Risk             • Consumer: Reg Reporting
+                  • Tech: Spark Streaming     • Tech: Databricks 15m       • Tech: Daily Scheduled
+                    direct from Kafka           Delta Live Tables (DLT)      Workflow (Midnight UTC)
+                  • Latency: < 500ms          • Latency: 15 mins           • Latency: 24 hours
+                  • Target: Redis Cache       • Target: Silver Delta       • Target: Gold Star Schema
+```
+
+---
+
+## 2. Implementation Strategies by Consumer
+
+### 1. Consumer 1: Fraud Detection (Sub-Second Streaming)
+- Reads directly from the **Kafka ingestion topic** using Spark Structured Streaming / Flink with memory state stores.
+- Computes velocity rules in RAM without waiting for lakehouse commits.
+
+### 2. Consumer 2: Market Risk (15-Minute Micro-Batch)
+- Reads from the **Bronze Delta table** using Delta Streaming with `trigger(processingTime="15 minutes")`.
+- Incrementally computes 15-minute position aggregates and upserts into Silver Risk tables.
+
+### 3. Consumer 3: Regulatory Reporting (Daily Batch)
+- Executes an EOD batch job at 00:00 UTC using `trigger(availableNow=True)` or standard SQL batch workflows.
+- Runs full financial reconciliations and outputs certified Gold regulatory snapshots.
+
+---
+
+## 3. Key Advantages
+1. **Single Source of Truth:** All downstream paths originate from the same immutable raw event stream.
+2. **Cost Optimization:** Computing 15-minute micro-batches or daily snapshots avoids running continuous expensive 24/7 high-compute clusters for workloads that do not require sub-second latency.
