@@ -1,0 +1,73 @@
+# PySpark: Finding Top 3 Products Sold per Region
+
+## Question
+Write a PySpark script to find the top 3 highest revenue-generating products in each geographical region using window functions.
+
+---
+
+## 1. Complete PySpark Solution
+
+```python
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
+from pyspark.sql.window import Window
+
+
+def get_top_3_products_per_region():
+    spark = SparkSession.builder.appName("Infosys_Top_Products").getOrCreate()
+
+    # Sample Input DataFrame
+    data = [
+        ("North", "Laptop", 120000),
+        ("North", "Smartphone", 95000),
+        ("North", "Monitor", 45000),
+        ("North", "Keyboard", 15000),
+        ("South", "Smart TV", 200000),
+        ("South", "Smartphone", 180000),
+        ("South", "Tablet", 60000),
+        ("South", "Headphones", 25000),
+        ("East", "Laptop", 110000),
+        ("East", "Tablet", 75000),
+        ("East", "Monitor", 50000),
+        ("East", "Mouse", 10000)
+    ]
+    columns = ["region", "product_name", "total_sales"]
+    df = spark.createDataFrame(data, columns)
+
+    # Define Window Specification: Partitioned by region, ordered by sales descending
+    window_spec = Window.partitionBy("region").orderBy(F.col("total_sales").desc())
+
+    # Apply DENSE_RANK() to handle potential revenue ties gracefully
+    df_ranked = (
+        df
+        .withColumn("sales_rank", F.dense_rank().over(window_spec))
+        .filter(F.col("sales_rank") <= 3)
+        .orderBy("region", "sales_rank")
+    )
+
+    df_ranked.show()
+
+
+if __name__ == "__main__":
+    get_top_3_products_per_region()
+```
+
+---
+
+## 2. Expected Output
+
+```text
++------+------------+-----------+----------+
+|region|product_name|total_sales|sales_rank|
++------+------------+-----------+----------+
+|  East|      Laptop|     110000|         1|
+|  East|      Tablet|      75000|         2|
+|  East|     Monitor|      50000|         3|
+| North|      Laptop|     120000|         1|
+| North|  Smartphone|      95000|         2|
+| North|     Monitor|      45000|         3|
+| South|    Smart TV|     200000|         1|
+| South|  Smartphone|     180000|         2|
+| South|      Tablet|      60000|         3|
++------+------------+-----------+----------+
+```
