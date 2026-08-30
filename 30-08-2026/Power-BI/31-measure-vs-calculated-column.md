@@ -1,0 +1,28 @@
+# Difference Between Measure and Calculated Column in Power BI
+
+## Question
+What is the difference between a **Measure** and a **Calculated Column** in Power BI?
+
+---
+
+## 1. Comparison Matrix
+
+| Feature | Calculated Column | Measure |
+| :--- | :--- | :--- |
+| **Evaluation Timing** | Calculated during **data refresh** (static). | Calculated **on-the-fly (query time)** as visuals interact. |
+| **Memory & Storage** | Stored in RAM (VertiPaq column store), increases file size. | Consumes **zero storage**; computed in CPU on demand. |
+| **Evaluation Context**| Evaluated row-by-row (**Row Context**). | Evaluated based on active visual filters (**Filter Context**). |
+| **Best Used For** | Slicers, categorical row labels, grouping keys. | Numerical aggregations (SUM, AVG, KPIs, Ratios). |
+
+---
+
+## 2. DAX Examples
+
+```dax
+-- 1. Calculated Column (Row-by-Row evaluation)
+Total_Cost_Col = Sales[Quantity] * Sales[UnitCost]
+
+-- 2. Measure (Dynamic aggregation responsive to Slicers)
+Total_Sales_Measure = SUMX(Sales, Sales[Quantity] * Sales[UnitPrice])
+Profit_Margin = DIVIDE([Total_Sales_Measure] - SUM(Sales[Total_Cost]), [Total_Sales_Measure], 0)
+```
