@@ -1,0 +1,28 @@
+# Row-Level Security (RLS) in Power BI
+
+## Question
+What is Row-Level Security (RLS) in Power BI, and how do you implement Static vs Dynamic RLS?
+
+---
+
+## 1. What is Row-Level Security?
+
+**Row-Level Security (RLS)** restricts data access for specific users based on their login credentials/roles. Filters are enforced at the dataset level, ensuring users only see data they are authorized to view.
+
+---
+
+## 2. Static RLS vs Dynamic RLS
+
+### A. Static RLS (Hardcoded Roles)
+Create roles in Power BI Desktop &rarr; **Modeling Tab** &rarr; **Manage Roles**:
+```dax
+-- Role: Europe_Manager
+Dim_SalesTerritory[Region] = "Europe"
+```
+
+### B. Dynamic RLS (User Principal Name - UPN)
+Leverages `USERPRINCIPALNAME()` or `USERNAME()` against an entitlement security table:
+```dax
+-- Dynamic filter matching authenticated user email
+Dim_EmployeeSecurity[Email] = USERPRINCIPALNAME()
+```
