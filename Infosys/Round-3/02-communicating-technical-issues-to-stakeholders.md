@@ -1,0 +1,28 @@
+# Communicating Technical Issues to Non-Technical Stakeholders
+
+## Question
+How do you communicate complex technical data pipeline issues, delays, and trade-offs to business stakeholders?
+
+---
+
+## 1. The 4-Step Communication Framework
+
+```
+[ 1. State the Business Impact Directly (No Jargon) ]
+                         │
+                         ▼
+[ 2. Provide Clear ETA & Current Progress ]
+                         │
+                         ▼
+[ 3. Explain the High-Level Cause in Simple Analogies ]
+                         │
+                         ▼
+[ 4. Offer Actionable Options & Preventative Steps ]
+```
+
+---
+
+## 2. Example: Technical Reality vs Business Communication
+
+- **What Happened Technically:** *"A JVM GC overhead limit exceeded error occurred in stage 14 because upstream Kafka sent un-sanitized JSON with unexpected string fields causing Py4J serialization blocking."*
+- **What You Tell the Business:** *"We experienced a temporary processing delay this morning due to a sudden 3x spike in newly formatted source records. We have isolated the new records and are reprocessing today's sales report. Expected dashboard availability is 08:30 AM (a 30-minute delay). We will follow up with an automated validation check to prevent future delays."*
