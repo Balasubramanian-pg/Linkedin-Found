@@ -1,0 +1,25 @@
+# How to Design Interactive Dashboards in Excel
+
+## Question
+What is the standard workflow and best practice architecture for building interactive, executive-ready dashboards in Excel?
+
+---
+
+## 1. The 3-Tier Workbook Architecture
+
+```
+[ Tier 1: Raw Data Sheet ] ──> Stores tabular source data (Formatted as Excel Table `Ctrl + T`)
+            │
+            ▼
+[ Tier 2: Calculation / Pivot Sheet ] ──> Pivot Tables, Power Query, Summary formulas (Hidden)
+            │
+            ▼
+[ Tier 3: Presentation Dashboard ] ──> KPI Cards, Dynamic Charts, Slicers & Timelines
+```
+
+---
+
+## 2. Key Elements of a Professional Dashboard
+1. **KPI Summary Cards:** Big numbers displaying Total Revenue, MoM Growth, and Active Customers.
+2. **Interactive Slicers:** Connected across multiple pivot tables (`Report Connections`).
+3. **Clean Visuals:** Remove gridlines (`View > Uncheck Gridlines`), use consistent corporate palettes, and avoid clutter.
