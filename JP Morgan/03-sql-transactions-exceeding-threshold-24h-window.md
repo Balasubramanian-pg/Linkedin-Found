@@ -1,0 +1,86 @@
+# SQL: Identifying Accounts Exceeding Transaction Thresholds in a Rolling 24-Hour Window
+
+## Question
+Write a SQL query to detect suspicious activity: identify accounts where the cumulative transaction amount exceeds \$100,000 within any rolling 24-hour window, along with the start time, end time, and total velocity amount.
+
+---
+
+## 1. Challenge of Rolling Time-Window Aggregations
+A standard `GROUP BY account_id, DATE(transaction_time)` only looks at fixed calendar days. A fraudster can transact \$60,000 at 23:55 and \$60,000 at 00:05 (spanning two calendar days), bypassing calendar day filters while moving \$120,000 in 10 minutes.
+
+We must evaluate a **true sliding 24-hour window** per transaction.
+
+---
+
+## 2. Production SQL Solution (Window Frame with Interval)
+
+```sql
+WITH RollingWindowCalculations AS (
+    SELECT
+        transaction_id,
+        account_id,
+        transaction_time,
+        transaction_amount,
+        -- Rolling 24-hour sum: Current transaction + preceding transactions within 24 hours
+        SUM(transaction_amount) OVER (
+            PARTITION BY account_id
+            ORDER BY CAST(transaction_time AS TIMESTAMP)
+            RANGE BETWEEN INTERVAL '24' HOUR PRECEDING AND CURRENT ROW
+        ) AS rolling_24h_amount,
+        -- Rolling transaction count in 24 hours
+        COUNT(transaction_id) OVER (
+            PARTITION BY account_id
+            ORDER BY CAST(transaction_time AS TIMESTAMP)
+            RANGE BETWEEN INTERVAL '24' HOUR PRECEDING AND CURRENT ROW
+        ) AS rolling_24h_tx_count,
+        -- Earliest transaction in this 24-hour window
+        FIRST_VALUE(transaction_time) OVER (
+            PARTITION BY account_id
+            ORDER BY CAST(transaction_time AS TIMESTAMP)
+            RANGE BETWEEN INTERVAL '24' HOUR PRECEDING AND CURRENT ROW
+        ) AS window_start_time
+    FROM 
+        fact_financial_transactions
+    WHERE 
+        status = 'SETTLED'
+        AND transaction_time >= '2026-01-01'
+)
+SELECT
+    account_id,
+    transaction_id AS triggering_tx_id,
+    window_start_time,
+    transaction_time AS window_end_time,
+    rolling_24h_amount,
+    rolling_24h_tx_count
+FROM 
+    RollingWindowCalculations
+WHERE 
+    rolling_24h_amount > 100000.00
+ORDER BY 
+    account_id, 
+    transaction_time;
+```
+
+---
+
+## 3. Alternative ANSI Solution (Self-Join for Engines without Range Interval)
+
+```sql
+SELECT
+    t1.account_id,
+    t1.transaction_id AS base_tx_id,
+    t1.transaction_time AS window_start,
+    MAX(t2.transaction_time) AS window_end,
+    SUM(t2.transaction_amount) AS total_amount,
+    COUNT(t2.transaction_id) AS tx_count
+FROM fact_financial_transactions t1
+JOIN fact_financial_transactions t2
+    ON t1.account_id = t2.account_id
+   AND t2.transaction_time BETWEEN t1.transaction_time AND t1.transaction_time + INTERVAL '24' HOUR
+GROUP BY
+    t1.account_id,
+    t1.transaction_id,
+    t1.transaction_time
+HAVING
+    SUM(t2.transaction_amount) > 100000.00;
+```
