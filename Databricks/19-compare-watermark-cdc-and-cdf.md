@@ -1,0 +1,27 @@
+# Watermark vs CDC vs CDF (Change Data Feed)
+
+## Question
+Compare **Watermarking**, **CDC (Change Data Capture)**, and **CDF (Change Data Feed)** in Databricks and big data pipelines.
+
+---
+
+## 1. Comparison Matrix
+
+| Feature | Watermark | CDC (Change Data Capture) | CDF (Change Data Feed) |
+| :--- | :--- | :--- | :--- |
+| **Scope** | Spark Structured Streaming state management. | Extracting row-level mutations from source databases. | **Delta Lake native feature** tracking row-level table mutations. |
+| **Primary Purpose** | Bounds state memory and drops excessively late events. | Replicating transactional OLTP DB changes into Data Lake. | Exposing row-level changes (`INSERT`, `UPDATE_PREIMAGE`, `UPDATE_POSTIMAGE`, `DELETE`) from Delta tables to downstream pipelines. |
+| **Data Produced** | Timestamp threshold scalar. | Stream of change logs (`_op: 'I'|'U'|'D'`). | Delta table change stream with metadata columns (`_change_type`). |
+| **Enabling Syntax**| `.withWatermark("event_time", "1 hour")` | Database CDC agents (Debezium/Qlik). | `ALTER TABLE tbl SET TBLPROPERTIES (delta.enableChangeDataFeed = true)` |
+
+---
+
+## 2. Using Delta Change Data Feed (CDF) in Practice
+
+```sql
+-- 1. Enable CDF on Silver Table
+ALTER TABLE silver_orders SET TBLPROPERTIES (delta.enableChangeDataFeed = true);
+
+-- 2. Read incremental change feed in downstream streaming job
+SELECT * FROM table_changes('silver_orders', 2); -- Read changes since commit version 2
+```
