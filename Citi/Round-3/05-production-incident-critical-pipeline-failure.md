@@ -1,0 +1,31 @@
+# Incident Management: Handling Critical Production Pipeline Failures
+
+## Question
+What immediate steps do you take when a high-severity (P1) production data pipeline fails at 04:00 AM before financial markets open?
+
+---
+
+## 1. Immediate Incident Response Playbook
+
+```
+[ 00 - 05 Mins: Triage & Communication ]
+  ├── Acknowledge PagerDuty alert & open Incident Bridge.
+  └── Notify stakeholders: "Investigating failure in Market Risk EOD pipeline; next update in 15 mins."
+           │
+           ▼
+[ 05 - 20 Mins: Root Cause Identification & Rapid Recovery ]
+  ├── Inspect Orchestrator & Spark UI logs (Isolate error: Schema mismatch / OOM / Network timeout).
+  └── Execute Fast Recovery:
+        • Option A: Delta Time Travel rollback (`RESTORE TABLE TO TIMESTAMP AS OF...`).
+        • Option B: Re-run targeted failed partition with dedicated compute.
+           │
+           ▼
+[ 20 - 35 Mins: Verification & Service Restoration ]
+  ├── Run automated reconciliation checks (Row count, checksum balances).
+  └── Notify business: "Pipeline recovered and certified. All risk dashboards operational."
+           │
+           ▼
+[ Post-Incident: Root Cause Analysis (RCA) & Hardening ]
+  ├── Conduct blameless post-mortem within 24 hours.
+  └── Implement automated regression test and early-warning canary alerts.
+```
