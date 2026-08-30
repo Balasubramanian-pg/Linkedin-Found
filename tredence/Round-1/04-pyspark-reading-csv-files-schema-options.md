@@ -1,0 +1,63 @@
+# PySpark: Robust CSV Ingestion, Schemas & Corrupt Record Handling
+
+## Question
+How do you ingest CSV files in PySpark using explicit StructType schemas, and what are the critical options for handling delimiters, multiline text, header changes, and corrupted rows?
+
+---
+
+## 1. Production PySpark CSV Reader Implementation
+
+```python
+from pyspark.sql import SparkSession
+from pyspark.sql.types import (
+    DecimalType,
+    IntegerType,
+    StringType,
+    StructField,
+    StructType,
+    TimestampType,
+)
+
+spark = SparkSession.builder.appName("Tredence_CSV_Ingestion").getOrCreate()
+
+# 1. Define Strict Explicit Schema
+csv_schema = StructType([
+    StructField("transaction_id", StringType(), False),
+    StructField("customer_id", StringType(), False),
+    StructField("order_amount", DecimalType(18, 2), True),
+    StructField("order_date", StringType(), True),
+    StructField("store_code", StringType(), True),
+    StructField("_corrupt_record", StringType(), True)
+])
+
+# 2. Read CSV with Production Options
+df_csv = (
+    spark.read
+    .format("csv")
+    .schema(csv_schema)
+    .option("header", "true")
+    .option("sep", ",")
+    .option("dateFormat", "yyyy-MM-dd")
+    .option("nullValue", "NA")
+    .option("emptyValue", "")
+    .option("multiLine", "true")
+    .option("escape", """)
+    .option("mode", "PERMISSIVE")
+    .option("columnNameOfCorruptRecord", "_corrupt_record")
+    .load("abfss://raw@datalake.dfs.core.windows.net/sales_data/*.csv")
+)
+
+# 3. Separate Clean Records from Corrupted Rows
+df_clean = df_csv.filter(df_csv["_corrupt_record"].isNull()).drop("_corrupt_record")
+df_corrupt = df_csv.filter(df_csv["_corrupt_record"].isNotNull())
+```
+
+---
+
+## 2. Ingestion Modes Comparison
+
+| Mode | Behavior on Malformed Row | Use Case |
+| :--- | :--- | :--- |
+| **`PERMISSIVE` (Default)** | Sets malformed fields to `null` and captures raw string in `_corrupt_record`. | Production pipelines with Dead Letter Queue (DLQ). |
+| **`DROPMALFORMED`** | Silently discards any row containing corrupt data. | Non-critical ad-hoc exploratory analytics. |
+| **`FAILFAST`** | Throws an exception and terminates the Spark job immediately. | Strict regulatory datasets where zero errors are tolerated. |
