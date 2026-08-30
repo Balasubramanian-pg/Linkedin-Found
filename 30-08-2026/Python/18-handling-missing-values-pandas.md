@@ -1,0 +1,58 @@
+# Handling Missing Values in Pandas
+
+## Question
+How do you detect, filter, drop, and impute missing (`NaN` / `None`) values in Pandas DataFrames?
+
+---
+
+## 1. Detecting Missing Values
+
+```python
+import pandas as pd
+import numpy as np
+
+df = pd.DataFrame({
+    "name": ["Alice", "Bob", np.nan, "David"],
+    "age": [25, np.nan, 30, 28],
+    "salary": [50000, 60000, 75000, np.nan]
+})
+
+# Summary count of nulls per column
+print(df.isna().sum())
+
+# Filter rows where age is missing
+missing_age = df[df["age"].isna()]
+```
+
+---
+
+## 2. Dropping Missing Values (`dropna`)
+
+```python
+# Drop rows where ANY column is null
+df_clean = df.dropna()
+
+# Drop rows where ALL columns are null
+df_clean = df.dropna(how="all")
+
+# Drop rows where specific column has nulls
+df_clean = df.dropna(subset=["name", "salary"])
+```
+
+---
+
+## 3. Imputing Missing Values (`fillna` / `interpolate`)
+
+```python
+# 1. Impute with constant default
+df_filled = df.fillna({"name": "Unknown", "salary": 0})
+
+# 2. Impute with statistical Mean / Median
+df["age"] = df["age"].fillna(df["age"].median())
+
+# 3. Forward Fill / Backward Fill (Time Series Data)
+df["salary"] = df["salary"].ffill() # Forward fill from previous row
+
+# 4. Linear Interpolation
+df["salary"] = df["salary"].interpolate(method="linear")
+```
