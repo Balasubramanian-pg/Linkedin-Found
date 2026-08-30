@@ -1,0 +1,20 @@
+# Handling Tight Deadlines with Pending Data Validation
+
+## Question
+What is your approach when a project deadline is tight, business stakeholders want the dashboard released, but comprehensive data validation is still pending?
+
+---
+
+## 1. My Professional Approach: Never Compromise Data Integrity
+
+In financial and enterprise data engineering, releasing unvalidated bad data causes greater reputational and financial damage than a transparent, controlled delay.
+
+---
+
+## 2. Action Plan
+
+1. **Deploy Minimum Viable Validation (Smoke Tests):**
+   - Run critical automated assertions: Primary Key Uniqueness, Non-Null constraints on financial amounts, and High-Level Row Count Reconciliation against the source.
+2. **Release with Transparency & 'Beta' Watermarking:**
+   - If business leadership requires immediate visual exploratory access, label the dashboard with a clear **"Preliminary / In-Validation"** banner.
+3. **Phased Rollout:** Release non-critical dimensions first while running full historical reconciliations in parallel.
