@@ -1,0 +1,37 @@
+# Shallow Copy vs Deep Copy in Python
+
+## Question
+What is the difference between a Shallow Copy and a Deep Copy in Python?
+
+---
+
+## 1. Core Differences
+
+| Feature | Reference Assignment (`b = a`) | Shallow Copy (`copy.copy(a)`) | Deep Copy (`copy.deepcopy(a)`) |
+| :--- | :--- | :--- | :--- |
+| **New Outer Object** | ❌ No (same memory address) | ✅ Yes (new container created) | ✅ Yes (new container created) |
+| **Nested Objects** | Shared | **Shared** (points to original nested objects) | **Cloned recursively** (completely independent) |
+| **Mutating Nested Item**| Mutates both | **Mutates both** | Does **not** affect original |
+
+---
+
+## 2. Code Demonstration
+
+```python
+import copy
+
+original = [[1, 2, 3], ["a", "b"]]
+
+# 1. Shallow Copy
+shallow = copy.copy(original)
+
+# 2. Deep Copy
+deep = copy.deepcopy(original)
+
+# Modify nested element in original
+original[0][0] = 999
+
+print("Original:", original) # [[999, 2, 3], ['a', 'b']]
+print("Shallow: ", shallow)  # [[999, 2, 3], ['a', 'b']]  <-- Mutated!
+print("Deep:    ", deep)     # [[1, 2, 3], ['a', 'b']]    <-- Preserved!
+```
