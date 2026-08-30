@@ -1,0 +1,33 @@
+# Spark Partitioning Strategies & Performance Tuning
+
+## Question
+What is partitioning in Apache Spark, how does it differ from storage directory partitioning, and how do you optimize partition count to maximize compute throughput?
+
+---
+
+## 1. In-Memory Partitions vs Storage Partitions
+
+| Concept | In-Memory Partitioning | Storage / File System Partitioning |
+| :--- | :--- | :--- |
+| **Location** | RAM / Disk across active Spark Executors. | Physical folder directory hierarchy on ADLS Gen2 (`/year=2026/month=08/`). |
+| **Purpose** | Parallelizes compute threads across CPU cores. | Enables **Partition Pruning** (skips scanning entire folders). |
+| **Controlled By**| `repartition()`, `coalesce()`, `spark.sql.shuffle.partitions`. | `df.write.partitionBy("date", "region")`. |
+
+---
+
+## 2. Partition Sizing Rules of Thumb
+
+1. **Target Partition Size:** Aim for **100 MB to 200 MB** of uncompressed data per partition.
+2. **Too Few Partitions (< 100MB):** Underutilizes cluster cores; large partitions cause Executor OOM and disk spills.
+3. **Too Many Partitions (> 1000s of tiny partitions):** Spends excessive CPU time on task scheduling and JVM GC overhead.
+
+---
+
+## 3. Dynamic Partition Tuning (Adaptive Query Execution - AQE)
+
+```python
+# Automatically coalesces tiny shuffle partitions at runtime
+spark.conf.set("spark.sql.adaptive.enabled", "true")
+spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
+spark.conf.set("spark.sql.adaptive.advisoryPartitionSizeInBytes", "134217728") # 128 MB
+```
