@@ -1,0 +1,38 @@
+# Excel Lookup Functions: VLOOKUP vs XLOOKUP vs INDEX-MATCH
+
+## Question
+Compare `VLOOKUP`, `XLOOKUP`, and `INDEX-MATCH` in Excel with syntax, limitations, and modern best practices.
+
+---
+
+## 1. Comparison Matrix
+
+| Feature | `VLOOKUP` | `INDEX-MATCH` | `XLOOKUP` (Modern Standard) |
+| :--- | :--- | :--- | :--- |
+| **Lookup Direction** | Left-to-Right only | Any direction (Left/Right/Up/Down) | **Any direction** |
+| **Column Insert/Delete Safety**| Breaks if column inserted | Resilient to column insertion | **Resilient to column insertion** |
+| **Default Match Mode** | Approximate (requires `FALSE` for exact)| Exact match (`0`) | **Exact match by default** |
+| **Error Handling (`IFERROR`)**| Requires nested `IFERROR` | Requires nested `IFERROR` | Built-in `[if_not_found]` argument |
+| **Multiple Return Columns** | Single column per formula | Single column | **Can return full array/range** |
+
+---
+
+## 2. Syntax & Examples
+
+### A. VLOOKUP
+```excel
+=VLOOKUP(lookup_value, table_array, col_index_num, [range_lookup])
+=VLOOKUP(A2, D:F, 3, FALSE)
+```
+
+### B. INDEX-MATCH
+```excel
+=INDEX(return_range, MATCH(lookup_value, lookup_range, 0))
+=INDEX(F:F, MATCH(A2, D:D, 0))
+```
+
+### C. XLOOKUP (Excel 2021+ / Microsoft 365)
+```excel
+=XLOOKUP(lookup_value, lookup_array, return_array, [if_not_found], [match_mode], [search_mode])
+=XLOOKUP(A2, D:D, F:F, "Not Found")
+```
