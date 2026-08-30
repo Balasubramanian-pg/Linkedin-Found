@@ -1,0 +1,22 @@
+# When Can a Broadcast Join Degrade Spark Performance?
+
+## Question
+Under what circumstances does forcing a **Broadcast Hash Join (BHJ)** degrade performance or crash a Spark application instead of speeding it up?
+
+---
+
+## 1. Scenarios Where Broadcast Joins Fail / Degrade Performance
+
+1. **Driver Out-of-Memory (OOM):**
+   - The Driver node must collect the entire broadcast table into its JVM memory before serializing and broadcasting it to all workers. If the table is 3 GB and Driver RAM is 4 GB, the Driver crashes immediately with OOM.
+2. **Network Bandwidth Saturation:**
+   - In a 100-node cluster, broadcasting a 1.5 GB table sends 1.5 GB * 100 = 150 GB of data over the network, saturating switch bandwidth.
+3. **High Frequency Broadcast in Tight Loops:**
+   - Re-broadcasting repeatedly inside streaming microbatches creates JVM garbage collection pressure.
+4. **Incorrect Cardinality Estimates after Filters:**
+   - If a filter is expected to reduce rows to 1,000 but returns 10,000,000 rows at runtime, forcing broadcast will freeze worker nodes.
+
+---
+
+## 2. Rule of Thumb
+Only broadcast tables that are strictly **under 1 GB** (ideally < 100 MB). For larger tables, rely on **Sort Merge Joins with AQE** or **Bucket Joins**.
