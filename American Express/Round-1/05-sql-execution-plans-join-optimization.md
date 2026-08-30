@@ -1,0 +1,97 @@
+# SQL Execution Plans & Complex Multi-Table Join Optimization
+
+## Question
+How do you analyze a SQL Query Execution Plan (`EXPLAIN` / `EXPLAIN ANALYZE`) and optimize performance across complex multi-table joins?
+
+---
+
+## 1. How SQL Query Optimizers Work
+
+When a query is submitted, the **Cost-Based Optimizer (CBO)** parses the AST, analyzes table statistics (cardinality, histogram distribution, index metadata), and selects a physical execution plan with the lowest estimated cost.
+
+```
+SQL Query ──> Logical Plan ──> Optimizer + Catalog Stats ──> Physical Plan ──> Engine Execution
+```
+
+---
+
+## 2. Reading Execution Plans: Key Metrics to Inspect
+
+Use `EXPLAIN ANALYZE` (or `SET STATISTICS IO, TIME ON` in T-SQL) to view both estimated cost and actual runtime metrics:
+
+```sql
+EXPLAIN ANALYZE
+SELECT 
+    c.cardholder_id,
+    c.cardholder_name,
+    m.merchant_category,
+    SUM(t.amount) AS total_spend
+FROM fact_transactions t
+INNER JOIN dim_cardholders c ON t.cardholder_id = c.cardholder_id
+INNER JOIN dim_merchants m ON t.merchant_id = m.merchant_id
+WHERE t.transaction_date >= '2026-01-01'
+  AND c.risk_tier = 'LOW'
+GROUP BY c.cardholder_id, c.cardholder_name, m.merchant_category;
+```
+
+### Critical Bottleneck Indicators:
+1. **Physical Join Operators:**
+   - **Hash Join:** Used for large unsorted datasets. High memory overhead for building the in-memory hash table.
+   - **Nested Loop Join:** Efficient when the outer table is very small (< 100 rows) and inner table has an index seek. Catastrophic ($O(M \times N)$) if inner table undergoes full scans.
+   - **Sort Merge Join:** Highly efficient for massive datasets if both inputs are pre-sorted or clustered on join keys.
+2. **Access Methods:**
+   - `Seq Scan / Table Scan` vs `Index Seek / Index Range Scan`.
+3. **Cardinality Estimation Errors:**
+   - If estimated rows = 10, but actual rows = 1,000,000, the optimizer chose a Nested Loop instead of a Hash/Merge Join due to stale statistics.
+4. **Memory Spills to Disk:**
+   - Look for `Spill to TempDB` / `External Sort/Hash Spill`.
+
+---
+
+## 3. Techniques to Optimize Complex Multi-Table Joins
+
+### Technique 1: Filter Early (Predicate Pushdown)
+Filter high-volume tables before joining to reduce working memory:
+
+```sql
+-- Suboptimal: Joins entire 100M-row table before filtering
+SELECT c.name, t.amount 
+FROM customers c 
+JOIN transactions t ON c.id = t.cust_id 
+WHERE t.date >= '2026-08-01';
+
+-- Optimized: Explicitly filter or ensure optimizer pushes down the date predicate
+```
+
+### Technique 2: Update Table Statistics
+Stale metadata causes catastrophic plan miscalculations:
+```sql
+ANALYZE TABLE fact_transactions COMPUTE STATISTICS FOR ALL COLUMNS; -- Databricks / Hive
+UPDATE STATISTICS fact_transactions WITH FULLSCAN;                  -- SQL Server
+```
+
+### Technique 3: Index Foreign Keys & Covering Indexes
+Ensure all join predicates have corresponding B-Tree / Clustered indexes:
+```sql
+CREATE INDEX idx_trans_cardholder_date 
+ON fact_transactions (cardholder_id, transaction_date) 
+INCLUDE (amount, merchant_id);
+```
+
+### Technique 4: Join Order and CTE Materialization
+By default, the optimizer explores join permutations ($N!$). In distributed engines (Spark/Presto/Trino), ensure the largest fact table is joined against pre-filtered dimensions, or use broadcast hints:
+```sql
+SELECT /*+ BROADCAST(m) */ t.id, m.name
+FROM fact_transactions t
+JOIN dim_merchants m ON t.merchant_id = m.merchant_id;
+```
+
+---
+
+## 4. Summary Troubleshooting Checklist
+
+| Symptom in Execution Plan | Root Cause | Fix |
+| :--- | :--- | :--- |
+| `Sequential Scan` on billion-row table | Missing index or non-SARGable predicate (`WHERE YEAR(dt)=2026`) | Add composite index; rewrite predicate to range (`dt >= '2026-01-01'`) |
+| Nested Loop Join taking hours | Bad cardinality estimates / missing index on inner table | Update statistics or add index on foreign key |
+| Memory Spills in Hash Aggregates / Joins | Work memory (`work_mem`) too low or huge shuffle | Increase memory buffer, repartition data, or use Sort Merge Join |
