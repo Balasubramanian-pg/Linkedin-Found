@@ -1,0 +1,37 @@
+# Apache Spark Deep Dive: Partitioning, Shuffling, Caching & AQE
+
+## Question
+Provide an architectural deep dive into Spark Partitioning, Network Shuffling, Memory Caching/Persistence, Data Skew handling, and Adaptive Query Execution (AQE).
+
+---
+
+## 1. Spark Execution Architecture Summary
+
+```
++---------------------------------------------------------------------------------------------------+
+|                                 Spark Core Internal Concepts                                      |
++-------------------+-------------------+-------------------+-------------------+-------------------+
+|   Partitioning    |     Shuffling     |  Caching/Persist  |     Data Skew     |       AQE         |
+| • 100-200MB size  | • Wide Dependency | • `MEMORY_AND_    | • Key Salting     | • Dynamic coalesce|
+| • repartition vs  | • Exchange stage  |    DISK_SER`      | • Isolate Nulls   | • Skew join split |
+|   coalesce        | • Spill to disk   | • Unpersist()     | • Broadcast join  | • Convert SMJ->BHJ|
++-------------------+-------------------+-------------------+-------------------+-------------------+
+```
+
+---
+
+## 2. Detailed Technical Breakdown
+
+### A. Partitioning & Shuffle Exchange
+- **Shuffle Boundaries:** Wide operations (`groupBy`, `join`, `distinct`) write shuffle files to disk and transfer partitions over the network.
+- **Tuning:** Set `spark.sql.shuffle.partitions` to ensure shuffle partition sizes stay between 100 MB – 200 MB.
+
+### B. Caching vs Persisting
+- `df.cache()`: Shortcut for `persist(StorageLevel.MEMORY_AND_DISK)`.
+- **Rule:** Only cache if the exact DataFrame is evaluated across **2 or more separate Actions**. Always call `df.unpersist()` after usage.
+
+### C. Adaptive Query Execution (AQE) in Spark 3.x
+AQE re-plans queries dynamically using runtime statistics gathered between stage boundaries:
+1. **Dynamically Coalescing Shuffle Partitions:** Merges small partitions automatically.
+2. **Dynamically Converting Sort Merge Join to Broadcast Join:** If one side turns out to be smaller than the broadcast threshold after filtering.
+3. **Dynamically Handling Skew Joins:** Splits heavily skewed tasks into smaller sub-tasks.
