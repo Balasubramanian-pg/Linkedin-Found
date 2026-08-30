@@ -1,0 +1,34 @@
+# Spark Transformations vs Actions & Lazy Evaluation
+
+## Question
+Explain the fundamental difference between **Transformations** and **Actions** in Apache Spark, and how **Lazy Evaluation** optimizes distributed execution.
+
+---
+
+## 1. Comparison Matrix
+
+| Attribute | Transformations | Actions |
+| :--- | :--- | :--- |
+| **Execution Behavior** | **Lazy** (Not executed immediately; builds DAG). | **Eager** (Triggers immediate cluster execution). |
+| **Output Type** | Returns a new **DataFrame / RDD**. | Returns concrete data to Driver (`List`, `Int`, `Boolean`) or writes to disk. |
+| **Examples** | `filter()`, `select()`, `groupBy()`, `join()`, `withColumn()`. | `count()`, `collect()`, `show()`, `take()`, `write.save()`. |
+| **Narrow vs Wide** | **Narrow** (no shuffle) vs **Wide** (triggers network shuffle). | N/A (Evaluates the entire upstream DAG). |
+
+---
+
+## 2. What is Lazy Evaluation and Why is it Beneficial?
+
+When you apply transformations on a DataFrame, Spark does **not** execute them row-by-row. Instead, it records instructions as a **Directed Acyclic Graph (DAG)** of logical execution stages.
+
+```
+Code Written:
+df1 = spark.read.parquet("trades.parquet")
+df2 = df1.filter("amount > 1000")
+df3 = df2.select("trade_id", "amount")
+df3.count()  <── ACTION (Execution Triggers Here!)
+```
+
+### Key Advantages of Lazy Evaluation:
+1. **Catalyst Optimization:** The Catalyst engine analyzes the complete DAG and optimizes operations globally (e.g., combining multiple filters into a single scan, pushing down projections).
+2. **Eliminates Redundant Compute:** If an intermediate column is created and filtered out later before an action, Spark never computes it in memory.
+3. **Pipelining / Whole-Stage CodeGen:** Spark merges multiple narrow transformations into a single JVM bytecode loop without writing intermediate states to RAM.
