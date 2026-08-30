@@ -1,0 +1,21 @@
+# Filter Context vs Row Context in Power BI DAX
+
+## Question
+Explain the fundamental difference between **Row Context** and **Filter Context** in Power BI.
+
+---
+
+## 1. Core Definitions
+
+- **Row Context:** Exists during row-by-row iteration (in Calculated Columns or iterator functions like `SUMX`, `FILTER`). It knows about the values in the "current row", but has **no awareness of other rows or visual slicers**.
+- **Filter Context:** The set of all active filters applied to the data model originating from slicers, report filters, matrix rows/columns, and `CALCULATE()` modifiers.
+
+---
+
+## 2. Summary Comparison
+
+| Attribute | Row Context | Filter Context |
+| :--- | :--- | :--- |
+| **Where it occurs** | Calculated Columns, `SUMX`, `AVERAGEX`. | Visuals, Slicers, Page Filters, `CALCULATE`. |
+| **Scope** | One row at a time. | Across entire subsets of filtered tables. |
+| **Filter Propagation**| Does **not** automatically filter related tables. | **Propagates across active relationships** ($1 \to *$). |
