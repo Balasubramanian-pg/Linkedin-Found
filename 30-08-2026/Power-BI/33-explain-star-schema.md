@@ -1,0 +1,27 @@
+# Star Schema Modeling in Power BI
+
+## Question
+Why is the **Star Schema** the official gold standard for data modeling in Power BI?
+
+---
+
+## 1. Structure of a Star Schema
+
+A Star Schema separates data into two distinct table types:
+1. **Fact Tables:** Contain numerical measurements and transaction metrics (`Sales_Amount`, `Quantity`, `Discount`) and foreign keys.
+2. **Dimension Tables:** Contain descriptive context attributes (`Customer_Name`, `Product_Category`, `Store_City`) connected via 1-to-Many (1:*) relationships.
+
+```
+   [ Dim_Customer (1) ] ──────┐
+                              ▼
+   [ Dim_Product  (1) ] ──> [ Fact_Sales (*) ]
+                              ▲
+   [ Dim_Date     (1) ] ──────┘
+```
+
+---
+
+## 2. Why Power BI's Engine (VertiPaq) Loves Star Schema
+- **Optimized Columnar Compression:** Dimension tables have low cardinality, leading to extreme compression.
+- **Fast Filter Propagation:** Relationships flow in one direction ($1 \to *$), preventing circular ambiguity.
+- **Simpler DAX:** Reduces the need for complex multi-table relationship bypasses.
