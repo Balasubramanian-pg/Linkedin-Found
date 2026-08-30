@@ -1,0 +1,110 @@
+# Ensuring Data Quality and Validation in Data Pipelines
+
+## Question
+How do you systematically ensure data quality, schema integrity, and automated validation across end-to-end data pipelines?
+
+---
+
+## 1. Multi-Layer Data Quality Framework
+
+Data validation is not a one-time check; it must be enforced progressively across every layer of the data lifecycle:
+
+```
+[ Ingestion / Bronze ] ──> Schema Validation, Quarantine malformed JSON, File format checks
+           │
+[ Processing / Silver] ──> Uniqueness / Primary Key checks, Referential Integrity, Range validations
+           │
+[ Serving / Gold ]     ──> Business Logic tests, SLA verification, Metric reconciliations
+```
+
+---
+
+## 2. Key Data Quality Dimensions
+
+| Dimension | Description | Example Test |
+| :--- | :--- | :--- |
+| **Completeness** | No unexpected missing or null values in mandatory fields. | `customer_id IS NOT NULL` |
+| **Uniqueness** | Primary keys and natural keys have no duplicates. | `COUNT(order_id) = COUNT(DISTINCT order_id)` |
+| **Validity** | Data adheres to defined formats, patterns, or domain ranges. | `email LIKE '%@%.%'`, `age BETWEEN 18 AND 120` |
+| **Consistency** | Cross-table relationships and foreign keys align. | Every `fact_sales.customer_id` exists in `dim_customer`. |
+| **Timeliness (Freshness)**| Data arrives and completes within defined SLA windows. | `MAX(ingestion_time) >= current_timestamp() - INTERVAL 1 HOUR` |
+| **Accuracy** | Values match authoritative source systems. | Total revenue checksum matches source ERP ledger. |
+
+---
+
+## 3. Practical Implementation Approaches
+
+### Approach 1: Delta Live Tables (DLT) Expectations (Databricks Native)
+Delta Live Tables allows declaring data quality constraints directly in SQL/Python with built-in enforcement actions (`WARN`, `DROP`, `FAIL`).
+
+```python
+import dlt
+from pyspark.sql.functions import col
+
+@dlt.table(
+    comment="Silver customer orders with data quality rules"
+)
+# Rule 1: Retain row but log warning metric if phone is invalid
+@dlt.expect("valid_phone", "phone IS NOT NULL")
+# Rule 2: Drop bad row from dataset silently
+@dlt.expect_or_drop("valid_amount", "order_amount > 0")
+# Rule 3: Fail entire pipeline immediately on catastrophic violation
+@dlt.expect_or_fail("valid_customer_key", "customer_id IS NOT NULL")
+def silver_orders():
+    return dlt.read("bronze_orders")
+```
+
+---
+
+### Approach 2: Great Expectations / Soda Core
+Open-source data assertion frameworks integrated into CI/CD and orchestrators (ADF/Airflow):
+
+```python
+import great_expectations as gx
+
+context = gx.get_context()
+validator = context.sources.pandas_default.read_dataframe(df)
+
+# Define expectations
+validator.expect_column_values_to_not_be_null(column="transaction_id")
+validator.expect_column_values_to_be_unique(column="transaction_id")
+validator.expect_column_values_to_be_between(column="discount_rate", min_value=0.0, max_value=1.0)
+
+# Validate and generate HTML Data Docs
+results = validator.validate()
+if not results.success:
+    raise ValueError(f"Pipeline Data Quality Failed: {results}")
+```
+
+---
+
+### Approach 3: Dead Letter Queue (DLQ) / Quarantine Pattern
+Instead of failing the entire batch pipeline when 5 records out of 10 million are corrupted, isolate bad records:
+
+```python
+from pyspark.sql import functions as F
+
+# Split dataset into valid and invalid streams
+df_validated = df_raw.withColumn(
+    "is_valid",
+    (F.col("user_id").isNotNull()) & 
+    (F.col("transaction_amount") >= 0) &
+    (F.col("email").rlike(r"^[\w\.-]+@[\w\.-]+\.\w+$"))
+)
+
+# Clean records proceed to Silver
+df_clean = df_validated.filter(F.col("is_valid") == True).drop("is_valid")
+df_clean.write.format("delta").mode("append").saveAsTable("silver_transactions")
+
+# Corrupt records routed to Quarantine for operational review
+df_quarantine = df_validated.filter(F.col("is_valid") == False)
+df_quarantine.write.format("delta").mode("append").saveAsTable("quarantine_transactions")
+```
+
+---
+
+## 4. Automated Alerting & Anomaly Detection
+
+1. **Row Count Threshold Alerts:** Trigger an alert if incoming daily volume varies by $\pm 30\%$ compared to the 7-day rolling average.
+2. **Schema Drift Detection:** Alert on unexpected column additions or type mutations.
+3. **Notification Webhooks:** Send failure summaries and Data Docs links directly to MS Teams / Slack channels and PagerDuty.
