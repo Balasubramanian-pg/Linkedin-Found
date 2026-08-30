@@ -1,0 +1,28 @@
+# Difference Between COUNTIF and COUNTIFS in Excel
+
+## Question
+What is the difference between `COUNTIF` and `COUNTIFS` in Excel?
+
+---
+
+## 1. Comparison Matrix
+
+| Feature | `COUNTIF` | `COUNTIFS` |
+| :--- | :--- | :--- |
+| **Criteria Count** | Single criterion only. | **Multiple criteria** (AND logic across up to 127 criteria ranges). |
+| **Syntax** | `=COUNTIF(range, criteria)` | `=COUNTIFS(criteria_range1, criteria1, criteria_range2, criteria2, ...)` |
+
+---
+
+## 2. Formulas & Examples
+
+```excel
+-- Count orders in the "West" region (Single Criterion)
+=COUNTIF(B2:B100, "West")
+
+-- Count orders in "West" region with Amount > 500 (Multiple Criteria)
+=COUNTIFS(B2:B100, "West", C2:C100, ">500")
+
+-- Count orders between two dates (2026-01-01 and 2026-01-31)
+=COUNTIFS(A2:A100, ">=2026-01-01", A2:A100, "<=2026-01-31")
+```
