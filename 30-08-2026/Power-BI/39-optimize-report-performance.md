@@ -1,0 +1,22 @@
+# How to Optimize Power BI Report Performance
+
+## Question
+How do you troubleshoot slow Power BI reports and optimize memory, DAX, and visual rendering performance?
+
+---
+
+## 1. Step 1: Use Performance Analyzer
+In Power BI Desktop &rarr; **View** &rarr; **Performance Analyzer** &rarr; **Start Recording**:
+- Breaks down every visual into **DAX Query Time**, **Visual Display Time**, and **Other (Waiting/Network)**.
+
+---
+
+## 2. Key Optimization Strategies
+
+1. **Star Schema Data Modeling:** Eliminate bidirectional filters and avoid many-to-many relationships.
+2. **Remove Unused Columns:** High-cardinality columns (GUIDs, timestamp columns with millisecond precision) destroy VertiPaq compression.
+3. **Limit Visuals per Page:** Keep visuals under 10–12 per tab to prevent browser rendering bottlenecks.
+4. **Optimize DAX Measures:**
+   - Use `DIVIDE(a, b)` instead of `a / b`.
+   - Avoid wrapping naked column references inside `CALCULATE`.
+   - Use variables (`VAR`) to store calculation results once instead of evaluating identical expressions multiple times.
