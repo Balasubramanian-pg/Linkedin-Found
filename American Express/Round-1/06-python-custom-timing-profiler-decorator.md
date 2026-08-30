@@ -1,0 +1,136 @@
+# Implementing Custom Python Decorators for Latency Profiling and Logging
+
+## Question
+How do you implement a production-grade Python decorator to measure, profile, log function execution latency, capture execution metadata, and handle errors/retries?
+
+---
+
+## 1. Core Architecture of a Decorator
+
+A Python decorator is a higher-order function that wraps another function to extend its behavior without modifying its source code. Using `functools.wraps` preserves the original function’s docstring, name, and type annotations.
+
+```
+Caller ──> [ Wrapped Decorator ] ──> Start Timer ──> Execute Function ──> Stop Timer ──> Log Metrics ──> Return Result
+```
+
+---
+
+## 2. Production Implementation: Latency Profiler & Logger
+
+```python
+import functools
+import logging
+import time
+import typing
+from typing import Any, Callable
+
+# Configure enterprise logger
+logger = logging.getLogger("DataPipelineProfiler")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+
+def profile_latency(
+    threshold_seconds: float = 0.0,
+    log_arguments: bool = False
+) -> Callable:
+    """
+    Parametric decorator that logs execution time, memory/arguments,
+    and alerts if runtime exceeds a given threshold.
+    """
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            func_name = func.__qualname__
+            start_time = time.perf_counter()
+            
+            if log_arguments:
+                logger.info(f"Starting {func_name} | args={args} kwargs={kwargs}")
+            else:
+                logger.info(f"Starting execution of {func_name}")
+                
+            try:
+                result = func(*args, **kwargs)
+                elapsed_time = time.perf_counter() - start_time
+                
+                # Check for performance SLA breach
+                if threshold_seconds > 0 and elapsed_time > threshold_seconds:
+                    logger.warning(
+                        f"⚠️ SLA BREACH: {func_name} took {elapsed_time:.4f}s "
+                        f"(Threshold: {threshold_seconds}s)"
+                    )
+                else:
+                    logger.info(f"✅ {func_name} completed in {elapsed_time:.4f}s")
+                    
+                return result
+                
+            except Exception as exc:
+                elapsed_time = time.perf_counter() - start_time
+                logger.error(
+                    f"❌ {func_name} FAILED after {elapsed_time:.4f}s with error: {str(exc)}",
+                    exc_info=True
+                )
+                raise  # Re-raise exception to allow pipeline orchestrator to handle
+                
+        return wrapper
+    return decorator
+```
+
+---
+
+## 3. Real-World Data Pipeline Usage Example
+
+```python
+import pandas as pd
+
+@profile_latency(threshold_seconds=2.0, log_arguments=False)
+def extract_transactions(batch_id: str) -> pd.DataFrame:
+    # Simulate DB extract / processing
+    time.sleep(0.75)
+    return pd.DataFrame({"tx_id": [101, 102], "amount": [450.0, 120.5]})
+
+
+@profile_latency(threshold_seconds=0.5)
+def transform_fraud_scores(df: pd.DataFrame) -> pd.DataFrame:
+    time.sleep(0.8)  # Exceeds 0.5s SLA
+    df["risk_flag"] = df["amount"] > 200
+    return df
+
+
+if __name__ == "__main__":
+    df = extract_transactions("BATCH_2026_08_30")
+    df_transformed = transform_fraud_scores(df)
+```
+
+### Execution Log Output:
+```text
+2026-08-30 22:25:00 [INFO] Starting execution of extract_transactions
+2026-08-30 22:25:01 [INFO] ✅ extract_transactions completed in 0.7512s
+2026-08-30 22:25:01 [INFO] Starting execution of transform_fraud_scores
+2026-08-30 22:25:02 [WARNING] ⚠️ SLA BREACH: transform_fraud_scores took 0.8015s (Threshold: 0.5s)
+```
+
+---
+
+## 4. Advanced: Auto-Retry Decorator with Exponential Backoff
+
+In cloud pipelines (calling REST APIs or Azure SQL), network blips occur frequently:
+
+```python
+def retry_with_backoff(retries: int = 3, backoff_factor: float = 2.0):
+    def decorator(func: Callable):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            delay = 1.0
+            for attempt in range(1, retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if attempt == retries:
+                        logger.error(f"Final retry {attempt} failed for {func.__name__}")
+                        raise
+                    logger.warning(f"Attempt {attempt} failed ({e}). Retrying in {delay}s...")
+                    time.sleep(delay)
+                    delay *= backoff_factor
+        return wrapper
+    return decorator
+```
