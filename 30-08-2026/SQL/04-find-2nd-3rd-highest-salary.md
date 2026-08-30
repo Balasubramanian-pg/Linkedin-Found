@@ -1,0 +1,81 @@
+# How to Find the 2nd or 3rd Highest Salary in SQL
+
+## Question
+Write SQL queries to find the 2nd and 3rd highest salary in an organization, handling ties and NULL values properly.
+
+---
+
+## 1. Approach 1: Using `DENSE_RANK()` (Recommended & Universal)
+
+```sql
+WITH RankedSalaries AS (
+    SELECT 
+        emp_id,
+        emp_name,
+        salary,
+        DENSE_RANK() OVER (ORDER BY salary DESC) AS rnk
+    FROM employees
+    WHERE salary IS NOT NULL
+)
+-- For 2nd highest salary: WHERE rnk = 2
+-- For 3rd highest salary: WHERE rnk = 3
+SELECT emp_id, emp_name, salary
+FROM RankedSalaries
+WHERE rnk = 2;
+```
+
+---
+
+## 2. Approach 2: Using `LIMIT` / `OFFSET` (MySQL, PostgreSQL, SQLite)
+
+```sql
+-- 2nd highest distinct salary
+SELECT DISTINCT salary 
+FROM employees 
+ORDER BY salary DESC 
+LIMIT 1 OFFSET 1;
+
+-- 3rd highest distinct salary
+SELECT DISTINCT salary 
+FROM employees 
+ORDER BY salary DESC 
+LIMIT 1 OFFSET 2;
+```
+
+---
+
+## 3. Approach 3: Subquery with `MAX()` (Standard ANSI SQL)
+
+```sql
+-- 2nd Highest Salary
+SELECT MAX(salary) AS second_highest_salary
+FROM employees
+WHERE salary < (SELECT MAX(salary) FROM employees);
+
+-- 3rd Highest Salary
+SELECT MAX(salary) AS third_highest_salary
+FROM employees
+WHERE salary < (
+    SELECT MAX(salary) 
+    FROM employees 
+    WHERE salary < (SELECT MAX(salary) FROM employees)
+);
+```
+
+---
+
+## 4. Top N Highest Salaries Per Department
+
+```sql
+WITH DeptRanks AS (
+    SELECT 
+        emp_name,
+        dept_id,
+        salary,
+        DENSE_RANK() OVER (PARTITION BY dept_id ORDER BY salary DESC) AS rnk
+    FROM employees
+)
+SELECT dept_id, emp_name, salary, rnk
+FROM DeptRanks
+WHERE rnk IN (2, 3);
+```
