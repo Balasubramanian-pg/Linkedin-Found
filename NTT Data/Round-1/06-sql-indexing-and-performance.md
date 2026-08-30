@@ -1,0 +1,76 @@
+# SQL Indexing and Query Performance
+
+## Question
+What is indexing in SQL and how does it improve query performance?
+
+---
+
+## 1. What is an Index?
+
+An **Index** is a auxiliary data structure (typically a **B-Tree** or **Hash Table**) that database management systems (DBMS) create and maintain to locate specific rows in a table without scanning every single row on disk (Full Table Scan).
+
+Think of an index like the index at the back of a textbook: instead of reading all 500 pages to find "Delta Lake", you look up "Delta Lake" in the index, find the exact page number (247), and jump directly there.
+
+---
+
+## 2. How Indexing Improves Performance
+
+Without an index, finding a row requires a **Full Table Scan** with $O(N)$ time complexity. With a balanced B-Tree index, the database engine navigates tree levels in $O(\log N)$ disk page reads.
+
+```
+                  [ Root Node ]
+                 /             \
+      [ Intermediate ]     [ Intermediate ]
+        /          \         /          \
+   [ Leaf 1 ]   [ Leaf 2 ] [ Leaf 3 ]  [ Leaf 4 ]  --> Points directly to physical RowIDs
+```
+
+### Key Performance Benefits:
+1. **Accelerates `WHERE` Filtering:** Instantly pinpoints relevant rows matching equality or range filters (`WHERE age BETWEEN 25 AND 35`).
+2. **Speeds Up `JOIN` Operations:** Indexes on foreign keys and join columns allow the optimizer to perform fast Index Nested Loop Joins or Merge Joins.
+3. **Avoids Costly Sorts (`ORDER BY` / `GROUP BY`):** B-Tree leaf nodes store keys in sorted order. If a query requests `ORDER BY indexed_col`, the engine can skip in-memory/spill sorting.
+4. **Enforces Uniqueness:** Unique indexes guarantee entity integrity (`PRIMARY KEY`, `UNIQUE`).
+5. **Covering Indexes (Index-Only Scan):** If all columns in the `SELECT` list exist within the index itself, the database engine avoids reading the actual base table data pages altogether.
+
+---
+
+## 3. Types of Indexes
+
+| Index Type | Structure / Mechanism | Common Use Case |
+| :--- | :--- | :--- |
+| **Clustered Index** | Dictates the physical storage order of table data. A table can have **only 1** clustered index (usually Primary Key). | Range queries, sequential reads, sorting. |
+| **Non-Clustered (Secondary) Index** | Separate data structure containing indexed keys and pointers (RowID / Clustered Key) to table rows. A table can have many. | Lookups on non-primary columns (e.g., `email`, `created_at`). |
+| **Composite (Composite/Multi-column)** | Index built across multiple columns `(dept_id, salary DESC)`. Follows the **left-to-right prefix rule**. | Queries filtering on both or the first prefix column. |
+| **Unique Index** | Guarantees all indexed column values are distinct. | `user_id`, `ssn`, `email`. |
+| **Filtered / Partial Index** | Index created only on a subset of rows using a predicate `WHERE is_active = 1`. | Large tables where only a small subset is regularly queried. |
+
+---
+
+## 4. SQL Example: Impact of Indexing
+
+```sql
+-- Creating an index on Customer Orders table
+CREATE INDEX idx_orders_customer_date 
+ON Orders (customer_id, order_date DESC);
+
+-- Query leveraging the composite index
+SELECT order_id, order_amount
+FROM Orders
+WHERE customer_id = 45091 
+  AND order_date >= '2026-01-01';
+```
+
+### Execution Plan Analysis:
+- **Without Index:** `Table Scan (Cost: 98,450)` &rarr; Scans 50,000,000 pages.
+- **With Index:** `Index Seek on idx_orders_customer_date (Cost: 3.2)` &rarr; Reads 3 B-Tree pages and 12 data pages.
+
+---
+
+## 5. Trade-offs and Best Practices
+
+> [!WARNING]
+> Indexes are not free! Excessive indexing degrades write performance and consumes disk storage.
+
+- **Write Overhead (DML Penalty):** Every `INSERT`, `UPDATE`, and `DELETE` must update the base table **plus** all associated indexes.
+- **Low Cardinality Columns:** Avoid indexing columns with very few distinct values (e.g., `gender`, `is_boolean`) unless using bitmap indexes in analytical systems.
+- **SARGable Queries:** Avoid wrapping indexed columns in functions (e.g., `WHERE YEAR(order_date) = 2026` invalidates index seek; use `WHERE order_date >= '2026-01-01' AND order_date < '2027-01-01'`).
