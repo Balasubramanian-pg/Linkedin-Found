@@ -1,0 +1,96 @@
+# Slowly Changing Dimensions: SCD Type 1 vs SCD Type 2
+
+## Question
+Explain the difference between **SCD Type 1** and **SCD Type 2** with real-world business use cases and implementation logic.
+
+---
+
+## 1. Overview of Slowly Changing Dimensions (SCD)
+
+Dimensions in a Data Warehouse (e.g., Customer Address, Product Category, Employee Department) change over time. Slowly Changing Dimension patterns dictate how those historical changes are tracked.
+
+```
+SCD Type 1: Overwrite Old Value (No History)
+[ Alice | 100 Main St | Texas ]  ==Update==>  [ Alice | 500 Oak St | California ]
+
+SCD Type 2: Add New Row with Validity Dates & Flag (Preserve Full History)
+Row 1: [ Alice | 100 Main St | Texas      | 2024-01-01 | 2026-08-30 | is_current = FALSE ]
+Row 2: [ Alice | 500 Oak St  | California | 2026-08-30 | 9999-12-31 | is_current = TRUE  ]
+```
+
+---
+
+## 2. Detailed Comparison
+
+| Attribute | SCD Type 1 | SCD Type 2 |
+| :--- | :--- | :--- |
+| **History Retention** | **No History** (destructive overwrite). | **Full History** (historical versions preserved). |
+| **Surrogate Keys** | Natural key or single static surrogate key. | New surrogate key generated for every new version of a record. |
+| **Audit Columns** | `last_updated_at` | `start_date`, `end_date`, `is_current`, `version_number`. |
+| **Storage Impact** | Minimal (fixed number of rows). | Growth proportional to mutation frequency. |
+| **Query Complexity** | Simple (`WHERE customer_id = 101`). | Requires filtering on `is_current = TRUE` or point-in-time date range. |
+| **Analytics Value** | Reflects current state only. | Enables point-in-time historical reporting and backtesting. |
+
+---
+
+## 3. Business Use Cases
+
+### A. SCD Type 1 Use Case: Correcting Data Errors & Non-Historical Attributes
+- **Scenario:** Correcting a typo in a customer's phone number, misspelled first name, or updating a user's notification preference.
+- **Why SCD 1:** Historical analysis does not depend on knowing the typo existed previously.
+
+### B. SCD Type 2 Use Case: Customer Relocation & Sales Tax Analysis
+- **Scenario:** A customer lived in Texas from 2024 to August 2026, then moved to California in September 2026.
+- **Why SCD 2:** When calculating 2025 revenue and tax by state, sales made in 2025 must be attributed to **Texas**, not California. An SCD 1 overwrite would retroactively and incorrectly reassign past Texas revenue to California.
+
+---
+
+## 4. Implementation in Delta Lake / SQL
+
+### A. SCD Type 1 Implementation (`MERGE INTO`)
+```sql
+MERGE INTO dim_customer AS target
+USING customer_updates AS source
+ON target.customer_id = source.customer_id
+WHEN MATCHED THEN
+  UPDATE SET 
+    target.phone = source.phone,
+    target.updated_at = current_timestamp()
+WHEN NOT MATCHED THEN
+  INSERT (customer_id, phone, updated_at)
+  VALUES (source.customer_id, source.phone, current_timestamp());
+```
+
+---
+
+### B. SCD Type 2 Implementation (Merge Pattern)
+```sql
+-- Step 1: Expire old active record and insert new active record in one atomic transaction
+MERGE INTO dim_customer_scd2 AS target
+USING (
+  -- Rows that need to be inserted as new versions
+  SELECT source.customer_id, source.address, source.state, current_timestamp() AS effective_date, NULL AS merge_key
+  FROM customer_updates source
+  JOIN dim_customer_scd2 target 
+    ON source.customer_id = target.customer_id AND target.is_current = TRUE
+  WHERE target.state <> source.state OR target.address <> source.address
+  
+  UNION ALL
+  
+  -- Rows that need to update the existing record's end_date
+  SELECT source.customer_id, source.address, source.state, current_timestamp() AS effective_date, source.customer_id AS merge_key
+  FROM customer_updates source
+) AS staged
+ON target.customer_id = staged.merge_key AND target.is_current = TRUE
+
+-- Expire previous version
+WHEN MATCHED THEN
+  UPDATE SET 
+    target.end_date = staged.effective_date,
+    target.is_current = FALSE
+
+-- Insert new version
+WHEN NOT MATCHED THEN
+  INSERT (customer_id, address, state, start_date, end_date, is_current)
+  VALUES (staged.customer_id, staged.address, staged.state, staged.effective_date, '9999-12-31', TRUE);
+```
