@@ -1,0 +1,115 @@
+# Tracking DAU and WAU with Late-Arriving Event Handling in SQL
+
+## Question
+How do you write SQL queries to compute **Daily Active Users (DAU)** and **Weekly Active Users (WAU)** (rolling 7-day distinct active users), and handle **late-arriving events** gracefully?
+
+---
+
+## 1. Metric Definitions
+
+- **DAU (Daily Active Users):** Number of distinct users who performed at least one qualified action on a given calendar date.
+- **WAU (Weekly Active Users / Rolling 7-Day Active Users):** Number of distinct users active in the 7-day sliding window `[T-6, T]`.
+- **DAU / WAU Ratio (Stickiness):** Measures user retention and platform engagement.
+
+---
+
+## 2. SQL Implementation: Rolling 7-Day Active Users (WAU)
+
+A naive `COUNT(DISTINCT user_id) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)` is **invalid** in most SQL dialects because distinct counting over sliding window frames is mathematically non-additive.
+
+### Robust Solution: Date Spine Self-Join
+
+```sql
+WITH ActivityBase AS (
+    -- Step 1: Deduplicate user activity per day
+    SELECT DISTINCT
+        user_id,
+        CAST(event_timestamp AS DATE) AS activity_date
+    FROM fact_user_events
+    WHERE event_timestamp >= '2026-01-01'
+),
+CalendarSpine AS (
+    -- Step 2: Continuous calendar dates
+    SELECT calendar_date
+    FROM dim_date
+    WHERE calendar_date BETWEEN '2026-01-07' AND '2026-08-30'
+),
+DailyMetrics AS (
+    -- Step 3: DAU per day
+    SELECT 
+        activity_date,
+        COUNT(DISTINCT user_id) AS dau
+    FROM ActivityBase
+    GROUP BY activity_date
+)
+-- Step 4: Combine DAU and Rolling 7-Day WAU
+SELECT
+    c.calendar_date,
+    COALESCE(dm.dau, 0) AS dau,
+    COUNT(DISTINCT ab.user_id) AS wau_rolling_7d,
+    ROUND(CAST(COALESCE(dm.dau, 0) AS FLOAT) / NULLIF(COUNT(DISTINCT ab.user_id), 0), 4) AS dau_wau_stickiness_ratio
+FROM CalendarSpine c
+LEFT JOIN DailyMetrics dm 
+    ON c.calendar_date = dm.activity_date
+LEFT JOIN ActivityBase ab 
+    -- Join all activities within the trailing 7-day sliding window [T-6, T]
+    ON ab.activity_date BETWEEN c.calendar_date - INTERVAL '6' DAY AND c.calendar_date
+GROUP BY 
+    c.calendar_date, 
+    dm.dau
+ORDER BY 
+    c.calendar_date;
+```
+
+---
+
+## 3. Handling Late-Arriving Events in Metric Tables
+
+### The Late-Arrival Problem:
+A mobile app user makes a transaction on **August 24th** while offline in airplane mode. The event syncs to the server on **August 30th**.
+
+```
+Event Occurred:  2026-08-24
+Event Ingested:  2026-08-30 (6 days late)
+```
+
+If the pipeline only calculates today's metrics incrementally, historical DAU/WAU for August 24–30 will remain permanently understated.
+
+### Solution: Lookback Window Ingestion Pipeline (Rolling Upsert)
+
+When computing daily aggregated metric tables:
+1. Identify the minimum event date in the incoming batch:
+   $$\text{recompute\_start\_date} = \min(\text{incoming\_batch.event\_date})$$
+2. Reprocess and `MERGE` the metrics table for the affected date range:
+
+```sql
+-- Dynamic Lookback Upsert
+MERGE INTO aggregate_daily_active_users AS target
+USING (
+    SELECT
+        c.calendar_date,
+        COUNT(DISTINCT CASE WHEN ab.activity_date = c.calendar_date THEN ab.user_id END) AS dau,
+        COUNT(DISTINCT ab.user_id) AS wau
+    FROM dim_date c
+    JOIN ActivityBase ab 
+        ON ab.activity_date BETWEEN c.calendar_date - INTERVAL '6' DAY AND c.calendar_date
+    WHERE c.calendar_date >= (SELECT MIN(CAST(event_timestamp AS DATE)) FROM incoming_events_batch)
+    GROUP BY c.calendar_date
+) AS source
+ON target.calendar_date = source.calendar_date
+WHEN MATCHED THEN
+  UPDATE SET 
+    target.dau = source.dau,
+    target.wau = source.wau,
+    target.updated_at = current_timestamp()
+WHEN NOT MATCHED THEN
+  INSERT (calendar_date, dau, wau, updated_at)
+  VALUES (source.calendar_date, source.dau, source.wau, current_timestamp());
+```
+
+---
+
+## 4. HyperLogLog (HLL) Optimization for TB-Scale Big Data
+For platforms with hundreds of millions of users (e.g., American Express cardholders), calculating `COUNT(DISTINCT user_id)` on a 7-day sliding window causes severe memory spills.
+- **Solution:** Use **HyperLogLog (HLL sketches)** supported in Databricks (`hll_sketch_agg`), Snowflake (`HLL`), and BigQuery (`HLL_COUNT.INIT`).
+- Compute daily HLL sketches per day ($O(1)$ size $\approx 16\text{ KB}$), and union the 7 daily sketches (`HLL_UNION_AGG`) in milliseconds without scanning raw user records.
