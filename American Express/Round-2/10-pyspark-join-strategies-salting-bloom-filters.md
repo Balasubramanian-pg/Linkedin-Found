@@ -1,0 +1,95 @@
+# Advanced Spark Join Strategies: Broadcast, Salting & Bloom Filters
+
+## Question
+What are the major join strategies in Apache Spark (Broadcast Hash Join, Shuffle Hash Join, Sort Merge Join), and how do you implement **Salting** and **Bloom Filters** to eliminate distributed join bottlenecks?
+
+---
+
+## 1. Spark Physical Join Strategies Overview
+
+```
+                      [ Join Strategy Decision ]
+                                  │
+          Is one table small enough to fit in executor RAM (< 10MB default / ~1-2GB tuned)?
+                     ├── YES ──> [ Broadcast Hash Join (BHJ) ] (Zero network shuffle on large table)
+                     │
+                     └── NO ───> Are keys sortable & join condition '='?
+                                   ├── YES ──> [ Sort Merge Join (SMJ) ] (Default for large tables)
+                                   └── NO ───> [ Shuffle Hash Join (SHJ) / Broadcast Nested Loop ]
+```
+
+---
+
+## 2. Deep Dive: The 3 Core Join Strategies
+
+### A. Broadcast Hash Join (BHJ)
+- The Driver downloads the small table and broadcasts a copy to every Executor node.
+- **Advantage:** Completely eliminates the Shuffle phase for the large dataset.
+- **Code:**
+  ```python
+  from pyspark.sql.functions import broadcast
+  df_joined = large_transactions_df.join(broadcast(small_merchant_df), "merchant_id")
+  ```
+
+### B. Sort Merge Join (SMJ)
+- Hashes and shuffles both datasets across all nodes based on join keys, sorts each partition, and merges them.
+- **Advantage:** Highly robust, handles arbitrary table sizes without memory OOMs by spilling to disk if needed.
+
+### C. Shuffle Hash Join (SHJ)
+- Shuffles both datasets and builds an in-memory hash table for each partition of the smaller table.
+- **Advantage:** Faster than SMJ when sorting is expensive and partitions fit within executor memory.
+
+---
+
+## 3. Advanced Technique 1: Join Key Salting (Handling Heavy Skew)
+
+When a specific join key contains 30% of total rows, standard joins route that entire key to a single executor partition, causing severe lag and OOM.
+
+### PySpark Salting Implementation:
+```python
+import pyspark.sql.functions as F
+
+SALT_BUCKETS = 8
+
+# 1. Add random salt (0 to 7) to large skewed transaction table
+df_large_salted = large_tx_df.withColumn(
+    "salt_id", F.concat(F.col("merchant_id"), F.lit("_"), F.floor(F.rand() * SALT_BUCKETS))
+)
+
+# 2. Explode the lookup dimension table to replicate each merchant key across all 8 salts
+df_small_exploded = (
+    small_dim_df
+    .withColumn("salt_array", F.array([F.lit(i) for i in range(SALT_BUCKETS)]))
+    .withColumn("salt_suffix", F.explode("salt_array"))
+    .withColumn("salt_id", F.concat(F.col("merchant_id"), F.lit("_"), F.col("salt_suffix")))
+    .drop("salt_array", "salt_suffix")
+)
+
+# 3. Perform balanced join across all executors
+df_result = df_large_salted.join(df_small_exploded, on="salt_id", how="inner").drop("salt_id")
+```
+
+---
+
+## 4. Advanced Technique 2: Bloom Filters in Distributed Joins
+
+A **Bloom Filter** is a space-efficient probabilistic data structure used to test whether an element is definitely NOT a member of a set.
+
+- In large joins (e.g., Fact Table $A$ with 500M rows joined with Filtered Dimension $B$ with 10,000 rows):
+- Spark can build a compact Bloom Filter on $B$'s keys and push it down to storage **before** reading $A$. This skips 95%+ of irrelevant Parquet files on disk before shuffling.
+
+```python
+# Databricks / Spark SQL Bloom Filter Join Syntax
+# Step 1: Create Bloom Filter on filtered subset
+# Step 2: Pushdown filter into Fact scan
+spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.enabled", "true")
+```
+```sql
+SELECT /*+ BLOOM_FILTER(m, merchant_id) */ 
+    t.transaction_id, 
+    t.amount, 
+    m.merchant_name
+FROM fact_transactions t
+JOIN dim_merchants m ON t.merchant_id = m.merchant_id
+WHERE m.country = 'CANADA';
+```
