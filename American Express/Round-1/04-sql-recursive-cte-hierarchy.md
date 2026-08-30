@@ -1,0 +1,132 @@
+# Recursive CTEs for Hierarchical Mapping in SQL
+
+## Question
+How do you write a Recursive Common Table Expression (CTE) in SQL to map organizational hierarchies, calculate reporting levels, build full hierarchy paths, and detect cyclical relationships?
+
+---
+
+## 1. Structure of a Recursive CTE
+
+A Recursive CTE consists of three essential components:
+1. **Anchor Member:** The initial query that returns the root level nodes (e.g., CEO / Top Executives with `manager_id IS NULL`).
+2. **Recursive Member:** The query that joins the anchor result back to the base table to fetch subsequent child records.
+3. **Termination Condition (`UNION ALL`):** Continues execution until no new rows are produced.
+
+```
+       [ Anchor Member ]  ──> Level 1: CEO (manager_id IS NULL)
+              │
+              ▼
+    [ Recursive Member 1 ] ──> Level 2: SVPs / VPs (reports to CEO)
+              │
+              ▼
+    [ Recursive Member 2 ] ──> Level 3: Directors (reports to VPs)
+              │
+              ▼
+    [ Recursive Member 3 ] ──> Level 4: Managers & Engineers
+```
+
+---
+
+## 2. Complete SQL Solution: Employee Hierarchy & Path Mapping
+
+```sql
+WITH RECURSIVE OrgHierarchy AS (
+    -- 1. ANCHOR MEMBER: Find root nodes (Top-level CEO / Executives)
+    SELECT
+        emp_id,
+        emp_name,
+        manager_id,
+        job_title,
+        salary,
+        1 AS hierarchy_level,
+        CAST(emp_name AS VARCHAR(1000)) AS reporting_path,
+        CAST(emp_id AS VARCHAR(1000)) AS id_path
+    FROM 
+        employees
+    WHERE 
+        manager_id IS NULL
+
+    UNION ALL
+
+    -- 2. RECURSIVE MEMBER: Join parent records with direct reports
+    SELECT
+        e.emp_id,
+        e.emp_name,
+        e.manager_id,
+        e.job_title,
+        e.salary,
+        h.hierarchy_level + 1 AS hierarchy_level,
+        CAST(CONCAT(h.reporting_path, ' -> ', e.emp_name) AS VARCHAR(1000)) AS reporting_path,
+        CAST(CONCAT(h.id_path, '/', e.emp_id) AS VARCHAR(1000)) AS id_path
+    FROM 
+        employees e
+    INNER JOIN 
+        OrgHierarchy h ON e.manager_id = h.emp_id
+)
+SELECT 
+    emp_id,
+    emp_name,
+    job_title,
+    manager_id,
+    hierarchy_level,
+    reporting_path
+FROM 
+    OrgHierarchy
+ORDER BY 
+    hierarchy_level, 
+    manager_id, 
+    emp_id;
+```
+
+---
+
+## 3. Sample Walkthrough & Output
+
+### Input Table (`employees`):
+| emp_id | emp_name | manager_id | job_title |
+| :--- | :--- | :--- | :--- |
+| 1 | Stephen Squeri | NULL | CEO |
+| 2 | Anna Sanchez | 1 | EVP Technology |
+| 3 | Rahul Sharma | 1 | EVP Risk & Analytics |
+| 4 | John Doe | 2 | VP Data Engineering |
+| 5 | Priya Patel | 4 | Lead Data Engineer |
+
+### Output:
+| emp_id | emp_name | manager_id | hierarchy_level | reporting_path |
+| :--- | :--- | :--- | :--- | :--- |
+| 1 | Stephen Squeri | NULL | 1 | Stephen Squeri |
+| 2 | Anna Sanchez | 1 | 2 | Stephen Squeri -> Anna Sanchez |
+| 3 | Rahul Sharma | 1 | 2 | Stephen Squeri -> Rahul Sharma |
+| 4 | John Doe | 2 | 3 | Stephen Squeri -> Anna Sanchez -> John Doe |
+| 5 | Priya Patel | 4 | 4 | Stephen Squeri -> Anna Sanchez -> John Doe -> Priya Patel |
+
+---
+
+## 4. Advanced: Detecting Cycles and Infinite Loops
+
+> [!CAUTION]
+> If dirty transactional data contains a cycle (e.g., A manages B, and B manages A), a recursive CTE will loop infinitely and crash the query engine unless cycle detection is implemented.
+
+### Cycle Protection in Modern SQL (Postgres / Oracle / Snowflake):
+```sql
+WITH RECURSIVE OrgHierarchy AS (
+    SELECT 
+        emp_id, emp_name, manager_id, 1 AS level,
+        ARRAY[emp_id] AS path_visited,
+        FALSE AS is_cycle
+    FROM employees
+    WHERE manager_id IS NULL
+    
+    UNION ALL
+    
+    SELECT 
+        e.emp_id, e.emp_name, e.manager_id, h.level + 1,
+        h.path_visited || e.emp_id,
+        e.emp_id = ANY(h.path_visited) AS is_cycle
+    FROM employees e
+    JOIN OrgHierarchy h ON e.manager_id = h.emp_id
+    WHERE NOT e.emp_id = ANY(h.path_visited) -- Terminate path if cycle detected
+      AND h.level < 20                      -- Hard depth safety guardrail
+)
+SELECT * FROM OrgHierarchy;
+```
