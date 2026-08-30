@@ -1,0 +1,26 @@
+# Difference Between Power Query and DAX in Power BI
+
+## Question
+When should transformations be done in **Power Query (M)** versus **DAX** in Power BI?
+
+---
+
+## 1. Core Rule of Thumb (Roche's Maxim of Data Transformation)
+> *"Transform data as far upstream as possible, and as far downstream as necessary."*
+
+---
+
+## 2. Comparison Matrix
+
+| Feature | Power Query (M Language) | DAX |
+| :--- | :--- | :--- |
+| **Phase** | **ETL & Data Ingestion** (Data Preparation). | **Data Modeling & Analytics** (Post-Load). |
+| **Execution** | During data refresh. | At report runtime (on visual interaction). |
+| **Best Used For** | Merging files, cleaning text, pivoting/unpivoting, removing columns. | Dynamic KPI metrics, YTD/MoM growth, ratios, context calculations. |
+
+---
+
+## 3. Decision Matrix: Power Query vs DAX
+
+- If a transformation is **static** (e.g., standardizing text, creating a custom age bracket column) &rarr; **Do it in Power Query**.
+- If a calculation is **dynamic** and responds to slicers/user interactions &rarr; **Do it in DAX**.
