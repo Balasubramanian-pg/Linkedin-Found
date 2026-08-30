@@ -1,0 +1,62 @@
+# Optimizing a Spark Job Suffering from Data Skew
+
+## Question
+A production Spark job is suffering from severe **data skew** (99% of tasks complete in seconds, but 1 task hangs for 45 minutes). How do you diagnose and resolve data skew?
+
+---
+
+## 1. How to Identify Data Skew in the Spark UI
+- Navigate to **Stages Tab** &rarr; **Task Metrics**:
+  - `Median Task Duration:` 4 seconds
+  - `Max Task Duration:` 48 minutes
+  - `Max Shuffle Read Size:` 8.5 GB vs `75th percentile:` 20 MB
+
+---
+
+## 2. Optimization Techniques
+
+### Technique 1: Join Key Salting
+When join keys have heavy skew (e.g., top institutional client ID):
+
+```python
+import pyspark.sql.functions as F
+
+SALT_BUCKETS = 8
+
+# 1. Add random salt to the large skewed table
+df_large_salted = df_large.withColumn(
+    "salt", F.concat(F.col("client_id"), F.lit("_"), F.floor(F.rand() * SALT_BUCKETS))
+)
+
+# 2. Explode lookup table across all salt values
+df_small_exploded = (
+    df_small
+    .withColumn("salt_array", F.array([F.lit(i) for i in range(SALT_BUCKETS)]))
+    .withColumn("salt_suffix", F.explode("salt_array"))
+    .withColumn("salt", F.concat(F.col("client_id"), F.lit("_"), F.col("salt_suffix")))
+    .drop("salt_array", "salt_suffix")
+)
+
+# 3. Join on the salted key
+df_result = df_large_salted.join(df_small_exploded, on="salt", how="inner").drop("salt")
+```
+
+---
+
+### Technique 2: Enable Adaptive Query Execution (AQE) Skew Join
+```python
+spark.conf.set("spark.sql.adaptive.enabled", "true")
+spark.conf.set("spark.sql.adaptive.skewJoin.enabled", "true")
+spark.conf.set("spark.sql.adaptive.skewJoin.skewedPartitionFactor", "5")
+spark.conf.set("spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes", "256MB")
+```
+
+---
+
+### Technique 3: Broadcast Hash Join
+If one of the datasets is small (< 1 GB), broadcast it to avoid the shuffle phase entirely:
+```python
+from pyspark.sql.functions import broadcast
+
+df_joined = df_large.join(broadcast(df_dim), "client_id")
+```
