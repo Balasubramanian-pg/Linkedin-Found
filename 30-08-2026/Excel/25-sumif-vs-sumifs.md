@@ -1,0 +1,27 @@
+# Difference Between SUMIF and SUMIFS in Excel
+
+## Question
+What is the difference between `SUMIF` and `SUMIFS` in Excel, and why does argument ordering differ?
+
+---
+
+## 1. Comparison Matrix
+
+| Feature | `SUMIF` | `SUMIFS` (Recommended) |
+| :--- | :--- | :--- |
+| **Criteria Support** | Single criterion only. | **Multiple criteria** (AND logic). |
+| **Sum Range Position**| **Last** argument: `=SUMIF(range, criteria, [sum_range])` | **First** argument: `=SUMIFS(sum_range, range1, crit1, ...)` |
+
+---
+
+## 2. Formulas & Examples
+
+```excel
+-- SUMIF: Total revenue for "Electronics"
+=SUMIF(B2:B100, "Electronics", C2:C100)
+
+-- SUMIFS: Total revenue for "Electronics" in "North" region for 2026
+=SUMIFS(C2:C100, B2:B100, "Electronics", D2:D100, "North", A2:A100, ">=2026-01-01")
+```
+
+> **Tip:** Always use `SUMIFS` even for single-condition sums to maintain consistent syntax and future-proof your spreadsheets.
