@@ -1,0 +1,55 @@
+# Difference Between Common Table Expression (CTE) and Subquery
+
+## Question
+What is the difference between a Common Table Expression (CTE) and a Subquery in SQL?
+
+---
+
+## 1. Comparison Matrix
+
+| Feature | Common Table Expression (CTE) | Subquery |
+| :--- | :--- | :--- |
+| **Syntax** | Defined at top using `WITH cte_name AS (...)` | Nested inside main query `(SELECT ...)` |
+| **Readability** | **High** (Modular, clean, top-down logic). | Low (Deeply nested subqueries become hard to read). |
+| **Reusability** | Can be referenced **multiple times** in the same query. | Must be re-written if needed in multiple clauses. |
+| **Recursion** | Supports **Recursive CTEs** (hierarchies/trees). | Does not support recursion. |
+| **Optimization** | Modern optimizers treat them similarly (inlined). | Inlined by the query planner. |
+
+---
+
+## 2. Code Comparison
+
+### Subquery Approach (Hard to Read / Nested):
+```sql
+SELECT dept_name, avg_sal
+FROM (
+    SELECT dept_id, AVG(salary) AS avg_sal
+    FROM employees
+    GROUP BY dept_id
+) AS dept_avg
+JOIN departments d ON dept_avg.dept_id = d.dept_id
+WHERE avg_sal > (SELECT AVG(salary) FROM employees);
+```
+
+### CTE Approach (Clean & Modular):
+```sql
+WITH OverallAvg AS (
+    SELECT AVG(salary) AS global_avg FROM employees
+),
+DeptAvg AS (
+    SELECT dept_id, AVG(salary) AS avg_sal
+    FROM employees
+    GROUP BY dept_id
+)
+SELECT d.dept_name, da.avg_sal
+FROM DeptAvg da
+JOIN departments d ON da.dept_id = d.dept_id
+CROSS JOIN OverallAvg oa
+WHERE da.avg_sal > oa.global_avg;
+```
+
+---
+
+## 3. When to Use Which?
+- **Use CTEs:** For complex transformations, multi-step aggregations, recursive hierarchies, or when a temporary dataset is referenced multiple times.
+- **Use Subqueries:** For quick, simple one-off scalar lookups in `WHERE` conditions (e.g., `WHERE salary > (SELECT AVG(salary) FROM emp)`).
