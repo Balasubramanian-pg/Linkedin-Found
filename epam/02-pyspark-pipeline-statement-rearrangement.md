@@ -1,0 +1,104 @@
+# PySpark: Rearranging Shuffled Pipeline Statements
+
+## Problem Statement
+You are presented with shuffled PySpark statements representing an end-to-end data pipeline. Rearrange them into a logically valid execution pipeline that:
+1. Initializes a SparkSession.
+2. Ingests raw JSON transaction data with an explicit schema.
+3. Applies record-level filtering and type casting.
+4. Performs customer-level grouping and aggregation.
+5. Filters aggregated summary metrics (having total spend > $1,000).
+6. Writes the final dataset as an ACID Delta table partitioned by region.
+
+---
+
+## 1. Shuffled / Jumbled Statements (Problem Input)
+
+```python
+# Shuffled snippet blocks:
+A. df_filtered_summary = df_grouped.filter(F.col("total_spend") > 1000.0)
+B. (df_filtered_summary.write.format("delta").mode("overwrite").partitionBy("region").saveAsTable("gold_customer_spend"))
+C. spark = SparkSession.builder.appName("EPAM_Data_Pipeline").getOrCreate()
+D. df_transformed = df_raw.filter(F.col("status") == "COMPLETED").withColumn("amount_usd", F.col("amount").cast("double"))
+E. df_raw = spark.read.schema(schema).json("abfss://raw@lake.dfs.core.windows.net/orders/")
+F. df_grouped = df_transformed.groupBy("customer_id", "region").agg(F.sum("amount_usd").alias("total_spend"), F.count("order_id").alias("order_count"))
+```
+
+---
+
+## 2. Correct Logical Execution Order
+
+```
+[ C. Initialize SparkSession ]
+               │
+               ▼
+[ E. Read Source JSON with Schema ]
+               │
+               ▼
+[ D. Transform & Filter Active Records ]
+               │
+               ▼
+[ F. Group & Aggregate by Customer & Region ]
+               │
+               ▼
+[ A. Filter Aggregated Summary Metrics ]
+               │
+               ▼
+[ B. Write Output as Partitioned Delta Table ]
+```
+
+**Correct Sequence:** `C` &rarr; `E` &rarr; `D` &rarr; `F` &rarr; `A` &rarr; `B`
+
+---
+
+## 3. Complete Executable PySpark Code
+
+```python
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
+from pyspark.sql.types import DoubleType, StringType, StructField, StructType
+
+# 1. Step C: Initialize SparkSession
+spark = SparkSession.builder.appName("EPAM_Data_Pipeline").getOrCreate()
+
+# Schema definition
+schema = StructType([
+    StructField("order_id", StringType(), False),
+    StructField("customer_id", StringType(), False),
+    StructField("region", StringType(), True),
+    StructField("amount", StringType(), True),
+    StructField("status", StringType(), True)
+])
+
+# 2. Step E: Read raw JSON dataset
+df_raw = spark.read.schema(schema).json("abfss://raw@lake.dfs.core.windows.net/orders/")
+
+# 3. Step D: Transform and apply row-level filters
+df_transformed = (
+    df_raw
+    .filter(F.col("status") == "COMPLETED")
+    .withColumn("amount_usd", F.col("amount").cast("double"))
+)
+
+# 4. Step F: Group and aggregate at Customer & Region level
+df_grouped = (
+    df_transformed
+    .groupBy("customer_id", "region")
+    .agg(
+        F.sum("amount_usd").alias("total_spend"),
+        F.count("order_id").alias("order_count")
+    )
+)
+
+# 5. Step A: Filter aggregated summary results
+df_filtered_summary = df_grouped.filter(F.col("total_spend") > 1000.0)
+
+# 6. Step B: Write output as partitioned Delta table
+(
+    df_filtered_summary
+    .write
+    .format("delta")
+    .mode("overwrite")
+    .partitionBy("region")
+    .saveAsTable("gold_customer_spend")
+)
+```
