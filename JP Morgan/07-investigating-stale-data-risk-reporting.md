@@ -1,0 +1,60 @@
+# Investigating Stale Data in Downstream Risk Reporting Applications
+
+## Question
+A mission-critical Market Risk Reporting application reports that morning dashboard metrics are displaying stale data from yesterday. How do you systematically triage, pinpoint the bottleneck, and resolve the incident?
+
+---
+
+## 1. Incident Response Triage Workflow
+
+```
+[ ALERT: Downstream Risk Dashboard Stale ]
+                     │
+                     ▼
+[ 1. Check Data Freshness Watermark & Last Modified Timestamps on Gold Tables ]
+                     │
+         ┌───────────┴───────────┐
+         ▼                       ▼
+   [ Gold Table Updated ]    [ Gold Table Stale ]
+   • Issue in BI Cache /     • Issue in Upstream Pipeline
+     Gateway Refresh           (Inspect Orchestrator DAG)
+                     │
+                     ▼
+[ 2. Inspect Orchestrator (Airflow / ADF) ]
+       ├── Task Failed / Retrying? ──> Inspect Worker Logs & Stack Trace
+       ├── Task Stuck in Running?  ──> Deadlock / Long-running Spark Stage
+       └── Upstream Dependency Missing? ──> Upstream EOD File Delay
+```
+
+---
+
+## 2. Step-by-Step Investigation Runbook
+
+### Step 1: Verify Lakehouse Table Freshness
+```sql
+-- Check latest committed timestamp and Delta transaction version
+DESCRIBE HISTORY gold_market_risk_positions LIMIT 5;
+
+SELECT 
+    MAX(event_timestamp) AS max_event_time,
+    MAX(_ingestion_timestamp) AS max_ingestion_time
+FROM gold_market_risk_positions;
+```
+
+### Step 2: Check Orchestrator Execution State
+- In **Apache Airflow / ADF / Control-M**:
+  - Locate the execution DAG for `market_risk_eod_pipeline`.
+  - Identify failed task nodes (`extract_fx_rates`, `compute_var_models`).
+
+### Step 3: Spark UI & Resource Bottleneck Triage
+- If Spark job is stuck:
+  - **Data Skew:** 1 single task stuck on 99% while others finished.
+  - **Executor Starvation:** Cluster failed to auto-scale due to cloud quota limits.
+  - **Lock Contention:** Another concurrent job holding exclusive metadata lock on target Delta table.
+
+---
+
+## 3. Remediation & Communication
+1. **Fix & Rerun with Target Partition:** Trigger targeted backfill for today's partition (`replaceWhere business_date = '2026-08-30'`).
+2. **Force Refresh BI Dataset:** Trigger Power BI / Tableau REST API dataset refresh.
+3. **Post-Mortem & Alerting Enhancement:** Add automated **Freshness SLA Monitors** (triggering alerts at 05:00 AM before business users log on).
