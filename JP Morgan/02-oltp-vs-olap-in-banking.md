@@ -1,0 +1,32 @@
+# OLTP vs OLAP in Banking & Capital Markets
+
+## Question
+Explain the fundamental differences between OLTP (Online Transaction Processing) and OLAP (Online Analytical Processing) systems and their specific use cases in banking.
+
+---
+
+## 1. Architectural Comparison
+
+| Attribute | OLTP (Online Transaction Processing) | OLAP (Online Analytical Processing) |
+| :--- | :--- | :--- |
+| **Primary Purpose** | Fast, reliable execution of day-to-day transactions. | Complex analytical queries and decision support. |
+| **Data Structure** | Normalized (3NF / BCNF) to eliminate write anomalies. | Denormalized (Star Schema / Snowflake Schema / Columnar). |
+| **Read vs Write Pattern**| High write/update frequency with point lookups ($O(1)$). | Heavy batch writes / scans; millions of rows read per query. |
+| **Latency SLA** | **Milliseconds** ($< 10\text{ ms}$). | **Seconds to Minutes**. |
+| **Storage Paradigm** | Row-oriented storage (B-Tree indexed pages). | Columnar storage (Parquet, Delta Lake, Snowflake Micro-partitions). |
+| **ACID Strictness** | Strict ACID (Atomicity, Consistency, Isolation, Durability). | ACID at batch/microbatch commit level. |
+| **Database Engines** | Oracle DB, PostgreSQL, CockroachDB, Spanner, SQL Server. | Snowflake, Databricks Lakehouse, BigQuery, ClickHouse. |
+
+---
+
+## 2. Real-World Banking Use Cases
+
+### A. OLTP Use Cases in Banking:
+1. **ATM Cash Withdrawals & POS Card Swipes:** Debiting account balance atomically while verifying available funds.
+2. **Order Execution & Trade Booking:** Placing an equity order on NASDAQ/NYSE; immediate atomic fill state update.
+3. **Fund Transfers (IMPS/NEFT/Fedwire):** Dual-entry bookkeeping (debit Source Account, credit Target Account in a single atomic transaction).
+
+### B. OLAP Use Cases in Banking:
+1. **Regulatory Reporting (Basel III / CCAR / Dodd-Frank):** Aggregating institutional capital adequacy ratios across millions of portfolio contracts.
+2. **Historical Anti-Money Laundering (AML) & Fraud Pattern Mining:** Scanning 5 years of historical wire transactions to identify money-laundering rings.
+3. **Daily Value at Risk (VaR) & PnL Computation:** Running Monte Carlo simulations across terabytes of derivative pricing curves.
