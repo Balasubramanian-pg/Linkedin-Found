@@ -1,0 +1,51 @@
+# Understanding `*args` and `**kwargs` in Python
+
+## Question
+What are `*args` and `**kwargs` in Python functions, and how are they used?
+
+---
+
+## 1. Definitions
+
+- **`*args` (Positional Variable Arguments):** Allows a function to accept any number of **positional arguments**, accessible inside the function as a **tuple**.
+- **`**kwargs` (Keyword Variable Arguments):** Allows a function to accept any number of **named/keyword arguments**, accessible inside the function as a **dictionary**.
+
+---
+
+## 2. Code Implementation
+
+```python
+def generate_report(*args, **kwargs):
+    print("Positional arguments (*args as tuple):", args)
+    print("Keyword arguments (**kwargs as dict):", kwargs)
+
+# Function Call
+generate_report("Sales", "2026-Q1", region="EMEA", currency="USD", tax_rate=0.18)
+```
+
+### Output:
+```text
+Positional arguments (*args as tuple): ('Sales', '2026-Q1')
+Keyword arguments (**kwargs as dict): {'region': 'EMEA', 'currency': 'USD', 'tax_rate': 0.18}
+```
+
+---
+
+## 3. Common Use Cases
+
+### A. Wrapper Functions & Decorators
+```python
+def log_execution(func):
+    def wrapper(*args, **kwargs):
+        print(f"Calling {func.__name__} with args={args}, kwargs={kwargs}")
+        return func(*args, **kwargs)
+    return wrapper
+```
+
+### B. Passing Arguments to Superclass / External APIs
+```python
+class CustomPipeline:
+    def __init__(self, name: str, *args, **kwargs):
+        self.name = name
+        super().__init__(*args, **kwargs)
+```
