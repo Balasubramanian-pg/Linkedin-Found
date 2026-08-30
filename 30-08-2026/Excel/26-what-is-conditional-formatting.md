@@ -1,0 +1,23 @@
+# Understanding Conditional Formatting in Excel
+
+## Question
+What is Conditional Formatting in Excel, and how do you use rule-based formatting, color scales, and custom formulas to highlight insights?
+
+---
+
+## 1. What is Conditional Formatting?
+
+**Conditional Formatting** dynamically alters the appearance (fill color, font color, borders, icons) of cells based on specific conditions or formulas.
+
+---
+
+## 2. Key Types of Rules
+
+1. **Highlight Cell Rules:** Greater than, Less than, Between, Equal to, Text contains, Duplicate values.
+2. **Top/Bottom Rules:** Top 10%, Bottom 10 items, Above Average.
+3. **Data Bars & Color Scales:** Heatmaps for performance matrix analysis.
+4. **Custom Formula Rules:** Highlighting entire rows based on a single cell condition:
+   ```excel
+   -- Highlight entire row where Order Status is "Cancelled"
+   =$E2="Cancelled"
+   ```
