@@ -1,0 +1,51 @@
+# Understanding List Comprehensions in Python
+
+## Question
+What is a List Comprehension in Python, and how does it compare to traditional `for` loops and `map()`/`filter()`?
+
+---
+
+## 1. Syntax & Concept
+
+A **List Comprehension** offers a concise, readable syntax to create a new list from an existing iterable.
+
+### Syntax:
+```python
+[expression for item in iterable if condition]
+```
+
+---
+
+## 2. Code Comparison
+
+### Traditional For-Loop:
+```python
+squares = []
+for x in range(10):
+    if x % 2 == 0:
+        squares.append(x ** 2)
+```
+
+### List Comprehension (Clean & Pythonic):
+```python
+squares = [x ** 2 for x in range(10) if x % 2 == 0]
+# Output: [0, 4, 16, 36, 64]
+```
+
+---
+
+## 3. Advanced Examples
+
+### A. Nested List Comprehension (Flattening a Matrix)
+```python
+matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+flattened = [val for row in matrix for val in row]
+# Output: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+```
+
+### B. Conditional If-Else (Ternary in Comprehension)
+```python
+scores = [85, 42, 90, 60]
+status = ["Pass" if score >= 50 else "Fail" for score in scores]
+# Output: ['Pass', 'Fail', 'Pass', 'Pass']
+```
