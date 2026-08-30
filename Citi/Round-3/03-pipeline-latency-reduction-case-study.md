@@ -1,0 +1,27 @@
+# Case Study: Reducing Data Pipeline Execution Latency
+
+## Question
+Describe a real-world scenario where you diagnosed a slow-running pipeline and significantly reduced its runtime.
+
+---
+
+## 1. Problem & Diagnosis
+A critical Databricks ETL job processing daily credit card authorizations was taking **3.5 hours** to complete, breaching its morning SLA.
+
+### Spark UI Investigation:
+1. **Shuffle Spills:** 180 GB of memory spill and 90 GB of disk spill during a large join between `FactAuthorizations` (800M rows) and `DimMerchants` (150K rows).
+2. **Suboptimal Join Operator:** Spark defaulted to SortMergeJoin instead of BroadcastHashJoin due to missing table statistics.
+3. **Small File Overhead:** Target Delta table contained over 450,000 tiny files (50 KB each).
+
+---
+
+## 2. Optimization Actions Taken
+1. **Broadcast Join Hint:** Explicitly forced broadcast on `DimMerchants` (`join(broadcast(df_merchants))`), completely eliminating the multi-gigabyte network shuffle.
+2. **Delta Lake Compaction:** Executed `OPTIMIZE fact_authorizations ZORDER BY (cardholder_id, tx_date)` to consolidate small files into ~1GB Parquet files.
+3. **Shuffle Partition Sizing:** Tuned `spark.sql.shuffle.partitions` from default 200 to 1,200 with AQE enabled.
+
+---
+
+## 3. Impact
+- **Runtime Reduction:** Job duration dropped from **3 hours 30 minutes to 18 minutes** (an 11x speedup).
+- **Zero Spills:** Memory and disk shuffle spills dropped to 0 GB.
