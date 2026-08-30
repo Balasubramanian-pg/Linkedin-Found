@@ -1,0 +1,41 @@
+# Designing an End-to-End Enterprise Data Pipeline in Azure
+
+## Question
+Walk through the architectural design of an end-to-end data pipeline built on Microsoft Azure for banking and capital markets.
+
+---
+
+## 1. Architecture Blueprint (Medallion Architecture)
+
+```
+[ Sources ]
+  - On-Premises Core Banking DB (Oracle / DB2)
+  - Market Feeds (Bloomberg / Refinitiv via REST APIs)
+  - FIX Protocol Trade Gateways
+         │
+         ▼ (ADF Self-Hosted Integration Runtime / Event Hubs)
+[ Landing & Bronze Layer: ADLS Gen2 ]
+  • Immutable raw data in native JSON / Parquet / Avro
+  • Partitioned by `ingestion_date=YYYY-MM-DD`
+         │
+         ▼ (Databricks Auto Loader `cloudFiles`)
+[ Silver Layer: Cleansed & Conformed Delta Lake ]
+  • Schema enforcement, type casting, currency normalization (FX conversion)
+  • Deduplication & SCD Type 2 dimension versioning via `MERGE INTO`
+         │
+         ▼ (Databricks Multi-Node Cluster / Photon Engine)
+[ Gold Layer: Business & Dimensional Models ]
+  • Star Schema Facts and Dimensions (Z-Ordered by Desk, Account, Date)
+  • Aggregated Liquidity and Value-at-Risk (VaR) Position Models
+         │
+         ├──> Azure Synapse / Databricks SQL Serverless
+         ├──> Power BI DirectLake Executive Dashboards
+         └──> Regulatory XML Reporting (FRTB / CCAR)
+```
+
+---
+
+## 2. Key Security & Governance Integration
+- **Azure Key Vault:** Centralized secret management with automated rotation for service principal credentials.
+- **Microsoft Purview & Unity Catalog:** Automated end-to-end data lineage and data cataloging.
+- **Azure Monitor / Log Analytics:** Emits custom telemetry alerts for SLA tracking.
