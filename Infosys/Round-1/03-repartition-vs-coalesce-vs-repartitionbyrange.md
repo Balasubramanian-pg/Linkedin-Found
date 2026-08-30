@@ -1,0 +1,32 @@
+# Repartition vs Coalesce vs RepartitionByRange in Spark
+
+## Question
+Explain the differences between `repartition()`, `coalesce()`, and `repartitionByRange()` in Apache Spark.
+
+---
+
+## 1. Comparison Matrix
+
+| Feature | `df.repartition(n)` | `df.coalesce(n)` | `df.repartitionByRange(n, "col")` |
+| :--- | :--- | :--- | :--- |
+| **Network Shuffle** | **Full Network Shuffle** (Hash partitioned across nodes). | **No Full Shuffle** (Merges local adjacent partitions). | **Full Network Shuffle** (Range partitioned). |
+| **Partition Count** | Can increase or decrease partition count. | Can **only decrease** partition count. | Can increase or decrease. |
+| **Data Distribution**| Uniform, balanced partition sizes. | May produce uneven partition sizes. | **Sorted ranges** across partitions. |
+| **Use Case** | Increasing parallelism, fixing severe skew. | Consolidating small files before writing to storage. | Range-based queries, sorting before writes. |
+
+---
+
+## 2. Visual & Code Walkthrough
+
+```python
+# 1. repartition: Full hash shuffle across cluster (Increases parallelism)
+df_balanced = df.repartition(400)
+
+# 2. coalesce: Zero-shuffle partition reduction (Best immediately before write)
+df_filtered = df.filter("is_active = true")
+df_filtered.coalesce(4).write.mode("overwrite").parquet("/mnt/lake/active_users/")
+
+# 3. repartitionByRange: Sorts records into ordered range partitions
+# Partition 0: [Dates Jan-Mar], Partition 1: [Dates Apr-Jun]...
+df_range = df.repartitionByRange(4, "order_date")
+```
