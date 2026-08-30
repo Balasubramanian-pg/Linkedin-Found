@@ -1,0 +1,43 @@
+# End-to-End Data Pipeline Architecture: Ingestion to Consumption
+
+## Question
+Walk through an end-to-end enterprise data pipeline that you have designed and implemented — from source ingestion to data transformation and analytical loading.
+
+---
+
+## 1. Enterprise Medallion Architecture Overview
+
+```
++-------------------+       +-----------------------+       +-------------------------+
+|  Source Systems   | ----> | Azure Data Factory    | ----> | Azure Data Lake Gen2    |
+| - On-Prem SQL DB  |  SHIR | (Orchestration & Copy)|       | (Bronze Raw Layer)      |
+| - SAP / ERP Feeds |       +-----------------------+       +-------------------------+
+| - REST APIs / CRM |                                                    |
++-------------------+                                                    v
+                                                            +-------------------------+
++-------------------+       +-----------------------+       | Azure Databricks        |
+| Consumption Layer | <---- | Azure Synapse SQL /   | <---- | (Silver & Gold          |
+| - Power BI Reports|       | Databricks SQL        | Delta | Transformations & Merge)|
+| - ML Feature Store|       | (Semantic Layer)      | Merge +-------------------------+
++-------------------+       +-----------------------+
+```
+
+---
+
+## 2. Step-by-Step Data Flow
+
+### Step 1: Ingestion (Bronze Layer)
+- **Azure Data Factory (ADF):** Uses Self-Hosted Integration Runtimes (SHIR) to connect securely to on-premises Oracle and SQL Server databases.
+- **Incremental Extraction:** Parameterized metadata-driven copy pipelines extract updated rows based on watermark columns (`ModifiedDate`) and land files in **ADLS Gen2** as raw JSON/Parquet with audit stamps (`_ingestion_date`).
+
+### Step 2: Cleansing & Conforming (Silver Layer)
+- **Databricks Auto Loader (`cloudFiles`):** Incrementally ingests new files as they land in Bronze.
+- **Transformations:** Removes duplicate records, validates schemas, imputes missing values, and standardizes data types.
+- **SCD Type 1 & 2 Upserts:** Executes Delta `MERGE INTO` on conformed dimensions and transactional fact tables.
+
+### Step 3: Business Modeling & Aggregation (Gold Layer)
+- **Dimensional Modeling:** Builds Star Schema Fact and Dimension tables.
+- **Performance Tuning:** Applies **Liquid Clustering / Z-ORDER** on high-frequency join and filter keys (`customer_id`, `transaction_date`).
+
+### Step 4: Serving & Reporting
+- Exposes Gold tables via Databricks SQL Warehouses and Azure Synapse Serverless to **Power BI** in DirectLake / Import mode.
