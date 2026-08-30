@@ -1,0 +1,18 @@
+# Understanding Power Query in Excel
+
+## Question
+What is Power Query in Excel, what is the 'M' language, and how does it automate ETL workflows?
+
+---
+
+## 1. What is Power Query?
+
+**Power Query** is Excel's built-in **ETL (Extract, Transform, Load)** data connectivity and preparation engine. It allows users to connect to disparate sources, clean and shape data, and load it into Excel or the Data Model.
+
+---
+
+## 2. Core Capabilities
+
+- **Automated Repeatability:** Every transformation step (filtering rows, unpivoting columns, removing nulls) is recorded as a sequential recipe in **M code**. Clicking **"Refresh All"** automatically repeats all steps on new incoming data.
+- **Unpivot Columns:** Converts wide, cross-tabulated reports into normalized database tables with a single click.
+- **Merge & Append Queries:** Combines tables vertically (`Append` ≈ SQL `UNION ALL`) or horizontally (`Merge` ≈ SQL `JOIN`).
