@@ -1,0 +1,50 @@
+# Implementing Incremental Data Loading in Azure Data Factory (ADF)
+
+## Question
+How do you implement metadata-driven incremental data extraction in Azure Data Factory (ADF) using watermark patterns and native Change Data Capture (CDC)?
+
+---
+
+## 1. Watermark-Based Incremental Loading Workflow
+
+```
+[ 1. Lookup Old Watermark ] ──> Read last processed timestamp from `WatermarkControlTable`
+               │
+               ▼
+[ 2. Lookup New Max Watermark ] ──> Query `SELECT MAX(ModifiedDate) FROM SourceDB.Trades`
+               │
+               ▼
+[ 3. Copy Data Activity ] ──> `WHERE ModifiedDate > '@{old_wm}' AND ModifiedDate <= '@{new_wm}'`
+               │
+               ▼
+[ 4. Stored Procedure Activity ] ──> Update `WatermarkControlTable` with `@{new_wm}` upon success
+```
+
+---
+
+## 2. Step-by-Step Implementation
+
+### Step 1: Create Watermark Table in Azure SQL
+```sql
+CREATE TABLE PipelineWatermark (
+    SourceTableName VARCHAR(100) PRIMARY KEY,
+    WatermarkColumn VARCHAR(100),
+    LastProcessedWatermark DATETIME2
+);
+
+INSERT INTO PipelineWatermark VALUES ('FactTrades', 'LastModifiedDate', '2026-01-01 00:00:00');
+```
+
+### Step 2: ADF Copy Activity Source Query
+```sql
+SELECT * 
+FROM SourceDB.FactTrades 
+WHERE LastModifiedDate > '@{activity('LookupOldWatermark').output.firstRow.LastProcessedWatermark}'
+  AND LastModifiedDate <= '@{activity('LookupNewWatermark').output.firstRow.NewMaxWatermark}'
+```
+
+---
+
+## 3. Alternative: ADF Native CDC / Change Tracking
+- For sources with SQL Server / Azure SQL CDC enabled:
+- ADF Copy Activity supports native **Change Data Capture**, capturing `INSERT`, `UPDATE`, and `DELETE` operations without custom watermark queries.
