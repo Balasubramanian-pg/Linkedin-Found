@@ -1,0 +1,143 @@
+# End-to-End PySpark Pipeline: Nested JSON Parsing, Transformations & Partitioned Parquet
+
+## Question
+Write a complete, end-to-end PySpark pipeline that reads nested JSON payment payloads, enforces an explicit schema, extracts and flattens arrays/structs, applies fraud filtering logic, and writes out a partitioned, Snappy-compressed Parquet dataset.
+
+---
+
+## 1. Pipeline Architecture
+
+```
+[ Raw Nested JSON Payloads ]
+           │ (Explicit StructType Schema Ingestion)
+           ▼
+[ Flatten Structs & Explode Transaction Arrays ]
+           │
+           ▼
+[ Business Enrichments & Fraud Filters ]
+           │
+           ▼
+[ Coalesce / Repartition & Write Partitioned Parquet (by Year/Month/Region) ]
+```
+
+---
+
+## 2. Full PySpark Pipeline Implementation
+
+```python
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
+from pyspark.sql.types import (
+    ArrayType,
+    DecimalType,
+    DoubleType,
+    IntegerType,
+    StringType,
+    StructField,
+    StructType,
+    TimestampType,
+)
+
+
+def run_payment_pipeline():
+    # 1. Initialize SparkSession
+    spark = (
+        SparkSession.builder
+        .appName("Amex_Nested_JSON_Payment_Pipeline")
+        .config("spark.sql.parquet.compression.codec", "snappy")
+        .config("spark.sql.adaptive.enabled", "true")
+        .getOrCreate()
+    )
+
+    # 2. Define Explicit Strict Schema for Nested JSON
+    payment_schema = StructType([
+        StructField("batch_id", StringType(), False),
+        StructField("ingestion_time", StringType(), False),
+        StructField("cardholder", StructType([
+            StructField("account_id", StringType(), False),
+            StructField("card_type", StringType(), True),
+            StructField("country_code", StringType(), True)
+        ]), False),
+        StructField("transactions", ArrayType(
+            StructType([
+                StructField("tx_id", StringType(), False),
+                StructField("timestamp", StringType(), False),
+                StructField("amount", DoubleType(), False),
+                StructField("currency", StringType(), True),
+                StructField("merchant", StructType([
+                    StructField("merchant_id", StringType(), True),
+                    StructField("category", StringType(), True)
+                ]), True),
+                StructField("risk_score", IntegerType(), True)
+            ])
+        ), False)
+    ])
+
+    raw_json_path = "abfss://raw@datalake.dfs.core.windows.net/payment_events/2026/08/*/*.json"
+    output_parquet_path = "abfss://curated@datalake.dfs.core.windows.net/fact_card_payments/"
+
+    # 3. Read Nested JSON with Explicit Schema
+    raw_df = (
+        spark.read
+        .schema(payment_schema)
+        .option("mode", "DROPMALFORMED")
+        .json(raw_json_path)
+    )
+
+    # 4. Flatten Structs and Explode Array of Transactions
+    flattened_df = (
+        raw_df
+        # Explode transactions array into individual rows
+        .withColumn("tx", F.explode(F.col("transactions")))
+        .select(
+            F.col("batch_id"),
+            F.to_timestamp(F.col("ingestion_time")).alias("ingestion_timestamp"),
+            F.col("cardholder.account_id").alias("account_id"),
+            F.col("cardholder.card_type").alias("card_type"),
+            F.col("cardholder.country_code").alias("country_code"),
+            F.col("tx.tx_id").alias("transaction_id"),
+            F.to_timestamp(F.col("tx.timestamp")).alias("transaction_timestamp"),
+            F.col("tx.amount").cast(DecimalType(18, 2)).alias("transaction_amount"),
+            F.col("tx.currency").alias("currency"),
+            F.col("tx.merchant.merchant_id").alias("merchant_id"),
+            F.col("tx.merchant.category").alias("merchant_category"),
+            F.col("tx.risk_score").alias("risk_score")
+        )
+    )
+
+    # 5. Apply Business Logic & Data Quality Filters
+    enriched_df = (
+        flattened_df
+        # Filter out invalid amounts and missing critical keys
+        .filter((F.col("transaction_amount") > 0) & (F.col("transaction_id").isNotNull()))
+        # Add derived date partition columns
+        .withColumn("tx_year", F.year(F.col("transaction_timestamp")))
+        .withColumn("tx_month", F.date_format(F.col("transaction_timestamp"), "MM"))
+        # Add risk classification flag
+        .withColumn(
+            "fraud_suspect_flag",
+            F.when((F.col("risk_score") > 85) | (F.col("transaction_amount") > 10000), F.lit(True))
+             .otherwise(F.lit(False))
+        )
+    )
+
+    # 6. Deduplicate on Primary Key (transaction_id)
+    deduplicated_df = enriched_df.dropDuplicates(["transaction_id"])
+
+    # 7. Write Out Partitioned Parquet with Snappy Compression
+    (
+        deduplicated_df
+        .write
+        .mode("append")
+        .partitionBy("tx_year", "tx_month", "country_code")
+        .format("parquet")
+        .option("compression", "snappy")
+        .save(output_parquet_path)
+    )
+
+    print("Pipeline successfully completed.")
+
+
+if __name__ == "__main__":
+    run_payment_pipeline()
+```
