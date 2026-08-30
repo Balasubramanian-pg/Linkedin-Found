@@ -1,0 +1,57 @@
+# Handling NULL Values, Duplicates & Bad Records in ETL Processing
+
+## Question
+How do you systematically handle `NULL` values, duplicate records, and corrupted/bad payloads in enterprise ETL pipelines?
+
+---
+
+## 1. Comprehensive Data Cleansing Framework
+
+```
+[ Raw Inbound Batch ]
+          │
+          ├── (1. Bad / Malformed Records) ──> Databricks Auto Loader Rescued Column / Dead Letter Queue (DLQ)
+          │
+          ├── (2. Null / Missing Data)     ──> Imputation (Mean/Median/Defaults) or Filter Drop
+          │
+          └── (3. Duplicate Business Keys)  ──> Window Deduplication (`ROW_NUMBER() = 1`) & Delta MERGE
+```
+
+---
+
+## 2. Practical PySpark Implementation
+
+```python
+from pyspark.sql import functions as F
+from pyspark.sql.window import Window
+
+# 1. Ingest with Rescued Data Column (Captures corrupted JSON without failing pipeline)
+df_raw = (
+    spark.readStream
+    .format("cloudFiles")
+    .option("cloudFiles.format", "json")
+    .option("cloudFiles.schemaLocation", "/mnt/checkpoints/schema")
+    .option("cloudFiles.rescuedDataColumn", "_rescued_data")
+    .load("/mnt/lake/raw/orders/")
+)
+
+# 2. Handle NULLs: Drop critical null keys, impute optional attributes
+df_cleaned_nulls = (
+    df_raw
+    .filter(F.col("order_id").isNotNull()) # Drop if primary key is null
+    .na.fill({
+        "customer_city": "Unknown",
+        "discount_amount": 0.0,
+        "is_priority": False
+    })
+)
+
+# 3. Deduplicate: Keep latest record per business key
+window_spec = Window.partitionBy("order_id").orderBy(F.col("updated_at").desc())
+df_deduped = (
+    df_cleaned_nulls
+    .withColumn("rn", F.row_number().over(window_spec))
+    .filter(F.col("rn") == 1)
+    .drop("rn")
+)
+```
