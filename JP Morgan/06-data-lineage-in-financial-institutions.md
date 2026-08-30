@@ -1,0 +1,52 @@
+# Data Lineage and Governance in Financial Institutions (BCBS 239)
+
+## Question
+What is Data Lineage, why is it legally mandated for Tier-1 investment banks (e.g., under BCBS 239 / GDPR / Dodd-Frank), and how do you implement automated end-to-end lineage tracking?
+
+---
+
+## 1. What is Data Lineage?
+
+**Data Lineage** is the complete, verifiable lifecycle record of data: where it originated (**Origin/Source**), how it moved across systems, what transformations were applied (**Processing/ETL**), and which reports and consumers ultimately depend on it (**Consumption**).
+
+```
+[ Trade Gateway FIX Log ]
+           │ (ADF Ingestion)
+           ▼
+[ Bronze: `raw_trades` ]
+           │ (Databricks Silver Cleanup: FX Currency Conversion)
+           ▼
+[ Silver: `conformed_trades` ]
+           │ (Gold Aggregation: Value-at-Risk VaR Calculation)
+           ▼
+[ Gold: `fact_daily_risk_positions` ]
+           ├──> Power BI Executive Liquidity Dashboard
+           └──> Regulatory XML Submission to Federal Reserve (FR Y-9C)
+```
+
+---
+
+## 2. Why Lineage is Critical in Banking
+
+1. **BCBS 239 Compliance (Risk Data Aggregation):** Mandates that banks must be able to trace every number on an executive risk report back to the exact source transactions within hours during financial crises.
+2. **Root Cause Analysis & Impact Assessment:** If a bug is discovered in a currency conversion function, data lineage identifies every downstream report and database impacted.
+3. **Auditability & Traceability:** Financial regulators require immutable proof that data was not tampered with between landing and reporting.
+
+---
+
+## 3. Technical Implementation
+
+1. **Automated Lineage with Unity Catalog & OpenLineage:**
+   - Databricks **Unity Catalog** automatically captures table-level and column-level lineage across all SQL, Python, and Scala queries without manual instrumentation.
+2. **Column-Level Lineage Tracking:**
+   ```sql
+   -- Unity Catalog automatically records that 'var_usd' is derived from:
+   -- fact_trades.amount * dim_fx_rates.exchange_rate
+   CREATE TABLE gold_risk AS
+   SELECT 
+       t.trade_id,
+       t.amount * fx.rate AS var_usd
+   FROM silver_trades t
+   JOIN dim_fx_rates fx ON t.currency = fx.currency;
+   ```
+3. **Metadata Catalog Integration:** Exporting lineage graphs into **Microsoft Purview / Collibra** for enterprise data dictionary governance.
