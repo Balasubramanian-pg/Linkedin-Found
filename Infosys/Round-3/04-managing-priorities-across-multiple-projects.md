@@ -1,0 +1,29 @@
+# Managing Work Priorities Across Multiple Concurrent Projects
+
+## Question
+How do you manage work priorities and maintain high deliverable quality when assigned to multiple concurrent data engineering initiatives?
+
+---
+
+## 1. Prioritization Framework (Eisenhower & Business Value Matrix)
+
+```
+                       High Impact
+                            ▲
+              ┌─────────────┼─────────────┐
+              │  Do First   │  Schedule   │
+              │  (P0 SLAs)  │ (Design/Ref)│
+  High Urgency ◄─────────────┼─────────────► Low Urgency
+              │  Delegate   │  Deprioritize
+              │  (Ad-hoc)   │  (Nice-to-have)
+              └─────────────┼─────────────┘
+                            ▼
+                        Low Impact
+```
+
+---
+
+## 2. Key Daily Strategies
+1. **Tier 1 (P0): Production SLA & Data Accuracy:** Any production incident impacting live dashboards or regulatory reporting is handled immediately.
+2. **Tier 2 (P1): Core Sprint Roadmap Deliverables:** Focused, uninterrupted blocks for pipeline development and architectural refactoring.
+3. **Tier 3 (P2): Ad-Hoc Data Requests:** Batch ad-hoc business query requests into designated office hours to avoid constant context switching.
