@@ -1,0 +1,42 @@
+# Python Generators and the `yield` Keyword
+
+## Question
+What are Generators in Python, how does the `yield` keyword work, and why are they essential for processing large datasets?
+
+---
+
+## 1. What is a Generator?
+
+A **Generator** is a special type of iterator function that produces a sequence of values lazily on-the-fly using the `yield` keyword instead of computing and loading all values into RAM simultaneously.
+
+```
+Standard Function: [ Compute all 10,000,000 items ] ──> Return [ List in RAM (2 GB) ]
+Generator Function: [ Compute 1 item ] ──> yield ──> Pause state ──> Next call (4 KB)
+```
+
+---
+
+## 2. Code Example: Reading Massive Files
+
+```python
+from typing import Generator
+
+def stream_huge_csv(file_path: str) -> Generator[str, None, None]:
+    # Reads a large file line-by-line with O(1) memory usage
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            yield line.strip()
+
+# Iterating lazily without loading entire file into memory
+for row in stream_huge_csv("large_transactions.csv"):
+    if "FRAUD" in row:
+        print("Detected:", row)
+        break
+```
+
+---
+
+## 3. Key Benefits
+1. **Memory Efficiency:** $O(1)$ memory complexity regardless of dataset size.
+2. **State Preservation:** The function execution state (local variables and instruction pointer) is preserved between yields.
+3. **Pipeline Chaining:** Multiple generator functions can be chained together into clean streaming ETL pipelines.
