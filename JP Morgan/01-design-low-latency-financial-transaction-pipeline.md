@@ -1,0 +1,54 @@
+# High-Throughput, Low-Latency Financial Transaction Pipeline Design
+
+## Question
+How would you design a data pipeline to process millions of financial transactions per second with 100% accuracy, strict exactly-once processing, and sub-second latency for an investment bank like J.P. Morgan?
+
+---
+
+## 1. End-to-End System Architecture
+
+```
++---------------------------------------------------------------------------------------------------+
+|                        Institutional Real-Time Financial Pipeline Architecture                    |
++---------------------------------------------------------------------------------------------------+
+  [ FIX / SWIFT Gateways / Core Banking ]
+                │
+                ▼ (TLS 1.3 + HMAC Signatures)
+  [ Message Ingestion Tier: Apache Kafka / Redpanda Cluster ]
+        ├── Topic Partitioning: Partitioned by `account_hash(account_id)` (guarantees intra-account ordering)
+        ├── Producer Config: `acks=all`, `enable.idempotence=true`, `max.in.flight.requests.per.connection=1`
+        └── Replication: 3x In-Sync Replicas (ISR) across distinct Availability Zones
+                │
+                ▼ (Sub-second Stream Processing)
+  [ Stream Processing Engine: Apache Flink / Spark Structured Streaming ]
+        ├── State Backend: RocksDB with incremental checkpointing to ADLS Gen2 / AWS S3
+        ├── Exactly-Once Semantics: Two-Phase Commit (2PC) Producer & Transactional Sink
+        └── Real-time Rules: Risk Scoring, AML Screening, Fraud Anomaly Detection
+                │
+                ├── (Fast Path: Sub-Second In-Memory Ledger / Cache) ──> Redis Enterprise / Apache Ignite
+                │
+                ├── (Audit & Persistence Path) ──> Delta Lake / Apache Iceberg (ACID Lakehouse)
+                │                                    ├── Bronze: Append-only raw audit log
+                │                                    ├── Silver: Deduplicated, normalized transactions
+                │                                    └── Gold: Real-time risk position & PnL models
+                │
+                └── (Alerting / DLQ) ──> Dead Letter Queue Kafka Topic + PagerDuty / SOC
++---------------------------------------------------------------------------------------------------+
+```
+
+---
+
+## 2. Key Architecture Pillars
+
+### A. Zero Data Loss & Ordering Guarantee
+- **Partition Key Strategy:** Partitioning Kafka topics strictly by `account_id` guarantees that all transactions for a single card/trading account land in the same partition and are processed strictly in chronological order.
+- **Idempotency at Ingestion:** Kafka producers configure `enable.idempotence=true`, preventing duplicate message publication during network retries.
+
+### B. Sub-Second Risk Evaluation & Ledger Settlement
+- **Flink Stateful Processing:** State is maintained locally in RocksDB SSD memory for sliding 60-second velocity checks (e.g., detecting multiple card transactions in different countries within seconds).
+- **Dual-Path Architecture (Lambda / Kappa):**
+  - **Speed Layer:** Immediate balance update and risk score calculation delivered in $< 50\text{ ms}$.
+  - **Serving Layer:** ACID lakehouse sync via Delta Lake / Apache Iceberg for downstream regulatory reporting (FRTB, Basel III, CCAR).
+
+### C. Exactly-Once End-to-End Processing
+- Uses Flink's **Chandy-Lamport distributed checkpointing algorithm** paired with transactional two-phase commit sinks to ensure zero dropped trades and zero double charges.
