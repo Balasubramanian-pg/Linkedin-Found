@@ -1,0 +1,55 @@
+# Azure Data Lake Storage Gen2 (ADLS Gen2) vs Azure Blob Storage
+
+## Question
+What is the difference between Azure Data Lake Storage Gen2 (ADLS Gen2) and Azure Blob Storage?
+
+---
+
+## 1. Core Architectural Difference: Flat vs Hierarchical Namespace
+
+The fundamental difference between standard Blob Storage and ADLS Gen2 is the **Hierarchical Namespace (HNS)**.
+
+```
+Azure Blob Storage (Flat Namespace):
+Virtual Paths simulated via forward slashes:
+  [Container]
+      └── "finance/2026/08/report.parquet" (A single flat object key)
+
+ADLS Gen2 (Hierarchical Namespace - HNS Enabled):
+True OS-style Directories & Subdirectories:
+  [Filesystem]
+      └── finance/ (Directory inode)
+            └── 2026/ (Directory inode)
+                  └── 08/ (Directory inode)
+                        └── report.parquet (File)
+```
+
+---
+
+## 2. Feature Comparison Matrix
+
+| Capability | Azure Blob Storage | ADLS Gen2 |
+| :--- | :--- | :--- |
+| **Namespace Structure** | **Flat Namespace** (virtual directory simulation) | **Hierarchical Namespace (HNS)** (real file/folder trees) |
+| **Directory Rename/Move**| $O(N)$ - Copies every single file under the prefix, then deletes originals. | $O(1)$ - Instantaneous atomic metadata pointer operation. |
+| **Directory Deletion** | $O(N)$ - Iteratively deletes every child object. | $O(1)$ - Single atomic directory removal. |
+| **Access Control & Security**| Azure RBAC, Shared Access Signatures (SAS), Storage Keys at container level. | **POSIX-compliant Access Control Lists (ACLs)** + Azure RBAC at granular folder/file levels. |
+| **Analytics Compatibility**| Generic REST API. | Fully compatible with **Hadoop Distributed File System (HDFS / `abfss://`)** & Apache Spark. |
+| **Query Engine Performance**| Slower directory partition pruning in Spark/Databricks/Synapse. | High-performance throughput and IOPS optimized for big data workloads. |
+| **Lifecycle Management** | Hot, Cool, Cold, Archive tiers supported. | Hot, Cool, Cold, Archive tiers supported. |
+| **Primary Use Cases** | Static website hosting, unstructured media/document storage, backup/disaster recovery. | Big Data Analytics, Data Lakes, Medallion Architecture, Spark/Delta Lake engines. |
+
+---
+
+## 3. Why ADLS Gen2 is Crucial for Spark & Databricks
+
+1. **Atomic Directory Renames:**
+   - When a Spark job commits output partitions, it writes to temporary staging folders (`_temporary/`) and renames them to target partition directories upon success.
+   - On **Blob Storage**, renaming a directory containing 10,000 files requires 10,000 individual copy and delete HTTP requests ($O(N)$), causing severe pipeline lag and race conditions.
+   - On **ADLS Gen2**, renaming is an atomic directory metadata update ($O(1)$), taking milliseconds.
+
+2. **Fine-Grained Data Governance (POSIX ACLs):**
+   - Enables setting granular read/write/execute permissions for Azure Active Directory (Entra ID) users, service principals, or security groups directly on specific folders (e.g., granting Finance Team access only to `/silver/finance/` without exposing `/silver/hr/`).
+
+3. **Optimized Driver Protocol (`abfss://`):**
+   - The Azure Blob File System driver (`abfss://<container>@<account>.dfs.core.windows.net/`) provides optimized multi-threaded I/O designed specifically for distributed compute engines.
