@@ -1,0 +1,79 @@
+# Historical Data Archiving Strategy: Balancing Retention, Cost, and Performance
+
+## Question
+Financial regulations mandate retaining 7 to 10 years of granular transaction data (100+ Terabytes), but 95% of business queries access only the last 90 days. How do you design an archiving and tiering strategy that minimizes storage costs without degrading query performance?
+
+---
+
+## 1. Tiered Lakehouse Storage Architecture
+
+```
++---------------------------------------------------------------------------------------------------+
+|                              Multi-Tiered Data Lifecycle Architecture                             |
++---------------------------------------------------------------------------------------------------+
+  [ Hot Tier: Last 90 Days ]
+  • Storage: ADLS Gen2 Hot / S3 Standard (Delta Lake format)
+  • Optimizations: Liquid Clustering / Z-ORDER on `(account_id, transaction_date)`
+  • SLA: Sub-second analytical queries for active risk & operations
+                │
+                ▼ (Automated Lifecycle Transition after 90 Days)
+  [ Warm / Cool Tier: 90 Days to 2 Years ]
+  • Storage: ADLS Gen2 Cool / S3 Standard-IA
+  • Optimizations: Compacted ~1GB Parquet files, Monthly Partitioning
+  • SLA: 2 - 10 second queries for quarterly compliance & audits
+                │
+                ▼ (Automated Lifecycle Transition after 2 Years)
+  [ Cold / Archive Tier: 2 Years to 10 Years ]
+  • Storage: Azure Archive Storage / AWS Glacier Flexible Deep Archive
+  • Cost: ~$0.00099 per GB/month (>90% storage savings)
+  • SLA: Rehydrated on-demand for legal discovery / regulatory subpoenas (1-3 hours retrieval)
++---------------------------------------------------------------------------------------------------+
+```
+
+---
+
+## 2. Partitioning & Pruning Strategy for Active Tables
+
+To ensure historical data inside the active table does not slow down daily queries:
+
+1. **Partition Pruning:** Partition physically by `year` and `month`:
+   ```sql
+   CREATE TABLE fact_transactions (
+       account_id STRING,
+       amount DECIMAL(18, 2),
+       transaction_time TIMESTAMP,
+       year INT,
+       month INT
+   )
+   USING DELTA
+   PARTITIONED BY (year, month);
+   ```
+2. **Predicate Pushdown:** Query planners skip scanning historical partition directories when queries filter `WHERE year = 2026 AND month = 8`.
+
+---
+
+## 3. Automated Data Lifecycle Management Rule (Azure ADLS / AWS S3)
+
+```json
+{
+  "rules": [
+    {
+      "name": "ArchiveOldLakehousePartitions",
+      "enabled": true,
+      "type": "Lifecycle",
+      "definition": {
+        "actions": {
+          "baseBlob": {
+            "tierToCool": { "daysAfterModificationGreaterThan": 90 },
+            "tierToArchive": { "daysAfterModificationGreaterThan": 730 },
+            "delete": { "daysAfterModificationGreaterThan": 3650 }
+          }
+        },
+        "filters": {
+          "prefixMatch": ["tables/fact_transactions/"]
+        }
+      }
+    }
+  ]
+}
+```
