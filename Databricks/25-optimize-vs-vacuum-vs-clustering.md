@@ -1,0 +1,36 @@
+# OPTIMIZE vs VACUUM vs Liquid Clustering in Delta Lake
+
+## Question
+Explain the distinct roles, commands, and interactions between `OPTIMIZE`, `VACUUM`, and **Liquid Clustering** in Delta Lake maintenance.
+
+---
+
+## 1. Comparison Matrix
+
+| Operation | Primary Purpose | Modifies Active Snapshot? | Physical File Action |
+| :--- | :--- | :--- | :--- |
+| **`OPTIMIZE`** | Compacts small files into optimal ~1GB files. | ✅ Yes (commits new consolidated files). | Creates new Parquet files; marks old files as tombstoned. |
+| **`VACUUM`** | Deletes tombstoned files older than retention period. | ❌ No (does not alter table data). | **Permanently deletes** physical files from storage disk. |
+| **`Liquid Clustering`**| Organizes data dynamically along specified clustering keys. | ✅ Yes (replaces static partition hierarchies). | Re-clusters files incrementally during `OPTIMIZE`. |
+
+---
+
+## 2. Production Maintenance Syntax
+
+```sql
+-- 1. Liquid Clustering Table Definition
+CREATE TABLE silver_sales (
+    order_id STRING,
+    customer_id STRING,
+    order_date DATE,
+    amount DOUBLE
+)
+USING DELTA
+CLUSTER BY (order_date, customer_id);
+
+-- 2. Run Periodic Compaction & Clustering
+OPTIMIZE silver_sales;
+
+-- 3. Run Periodic Vacuum (Prune files older than 7 days)
+VACUUM silver_sales RETAIN 168 HOURS;
+```
