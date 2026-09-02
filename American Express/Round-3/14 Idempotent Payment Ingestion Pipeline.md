@@ -26,7 +26,8 @@ How do you architect an end-to-end payment transaction ingestion pipeline that g
 +------------------------------------------------------------------------------------------------+
 ```
 
-```graph TD
+```mermaid
+graph TD
     A[Payment Terminals / Webhooks] -->|TLS + Signature Verification| B[API Gateway / Ingestion Service]
 
     subgraph Idempotency Check [Redis]
