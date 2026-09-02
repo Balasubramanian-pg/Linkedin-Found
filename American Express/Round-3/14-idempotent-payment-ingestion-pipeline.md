@@ -3,8 +3,6 @@
 ## Question
 How do you architect an end-to-end payment transaction ingestion pipeline that guarantees **strict idempotency**, handles **automated retries with Dead Letter Queues (DLQ)**, and supports **historical replays** without double-charging or duplicate record generation?
 
----
-
 ## 1. Architectural Blueprint
 
 ```
@@ -28,8 +26,6 @@ How do you architect an end-to-end payment transaction ingestion pipeline that g
 +------------------------------------------------------------------------------------------------+
 ```
 
----
-
 ## 2. Core Pillars of Idempotent Design
 
 ### Pillar 1: Idempotency Key at the Edge
@@ -37,8 +33,6 @@ How do you architect an end-to-end payment transaction ingestion pipeline that g
 - The API gateway checks a distributed Redis cache:
   - If the key exists: Returns the cached response immediately without re-executing.
   - If the key does not exist: Sets the key with a `SETNX` lock and 24-hour expiration.
-
----
 
 ### Pillar 2: Deterministic Delta Lake Upsert (`MERGE INTO`)
 In the storage layer, downstream writers must ensure that re-running a batch produces the exact same state without duplicate records:
@@ -79,8 +73,6 @@ WHEN NOT MATCHED THEN
   );
 ```
 
----
-
 ## 3. Automated Retry Strategy & Dead Letter Queue (DLQ)
 
 ```
@@ -96,8 +88,6 @@ WHEN NOT MATCHED THEN
 
 1. **Transient Errors (Network timeouts, throttling):** Retried automatically using **Exponential Backoff with Jitter** (`delay = min(max_delay, base * 2^attempt + rand(0, 1))`).
 2. **Deterministic Poison Pills (Invalid JSON, corrupt types):** Routed immediately to the DLQ table (`dlq_payment_failures`) with error stack trace and raw payload preserved.
-
----
 
 ## 4. Replay & Backfill Mechanism
 
