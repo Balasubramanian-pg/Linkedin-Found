@@ -54,6 +54,7 @@ graph TD
     M --> N[(Dimension Tables)]
     M --> O[(Fact Tables)]
 ```
+
 ## 2. Watermarking and Lookback Windows
 
 In an hourly pipeline running at 15:00 for the `[14:00 - 15:00]` ingestion window:
