@@ -26,6 +26,38 @@ How do you architect an end-to-end payment transaction ingestion pipeline that g
 +------------------------------------------------------------------------------------------------+
 ```
 
+```graph TD
+    A[Payment Terminals / Webhooks] -->|TLS + Signature Verification| B[API Gateway / Ingestion Service]
+
+    subgraph Idempotency Check [Redis]
+        B --> C{Generate / Verify Idempotency-Key UUIDv4}
+        C -->|Key absent → store| D[Redis Cache TTL: 24h]
+        C -->|Key exists → reject duplicate| E[Return 409 / Duplicate response]
+    end
+
+    B -->|Publish event| F[(Apache Kafka / Azure Event Hubs)]
+    F -->|Partitioned by cardholder_id| G[Spark Structured Streaming]
+
+    subgraph Spark Streaming Engine [Delta Engine]
+        G --> H[Checkpointing & WAL]
+        H --> I[Schema Validation & Business Rule Validation]
+
+        I -->|Valid Record| J[Delta MERGE INTO Target Table]
+        I -->|Malformed / Invalid| K[DLQ: Kafka Dead Letter Topic / Quarantine Delta Table]
+    end
+
+    J --> L[(Target Delta Table)]
+    K --> M[(DLQ / Quarantine Store)]
+
+    G --> N[Audit Metrics]
+    N --> O[Prometheus / CloudWatch]
+
+    style C fill:#f9f,stroke:#333,stroke-width:2px
+    style I fill:#ffd,stroke:#333,stroke-width:2px
+    style J fill:#dfd,stroke:#333,stroke-width:2px
+    style K fill:#fdd,stroke:#333,stroke-width:2px
+```
+
 ## 2. Core Pillars of Idempotent Design
 
 ### Pillar 1: Idempotency Key at the Edge
