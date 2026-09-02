@@ -26,8 +26,34 @@ Window Execution: [ T_start = 2026-08-30 14:00:00, T_end = 2026-08-30 15:00:00 ]
                        [ Update High-Watermark Metadata Store ]
 ```
 
----
+```mermaid
+graph TD
+    A[Hourly Schedule Trigger] -->|Airflow / ADF every hour| B[Window Execution]
+    
+    subgraph Window Configuration [T_start = 2026-08-30 14:00:00, T_end = 2026-08-30 15:00:00]
+        B --> C[Ingestion Source]
+        C -->|Filter by Ingestion Timestamp| D{Ingestion Time within [T_start, T_end]?}
+        D -->|Yes| E[Extract Max & Min Event Timestamps]
+        D -->|No| F[Skip / Log]
+    end
 
+    subgraph Watermark & Merge Logic
+        E --> G[Watermark Lookback Buffer]
+        G -->|e.g., 3 Hours| H[Calculate Watermark Window]
+        H --> I[Read Late-Arriving Data within Buffer]
+        I --> J[Atomic Delta MERGE into Target Dimension/Fact]
+    end
+
+    subgraph Metadata Store
+        J --> K[Update High-Watermark Metadata Store]
+        K --> L[(High-Watermark Table)]
+        L -->|Next run reference| B
+    end
+
+    J --> M[Target Tables]
+    M --> N[(Dimension Tables)]
+    M --> O[(Fact Tables)]
+```
 ## 2. Watermarking and Lookback Windows
 
 In an hourly pipeline running at 15:00 for the `[14:00 - 15:00]` ingestion window:
