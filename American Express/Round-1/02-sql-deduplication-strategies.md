@@ -3,8 +3,6 @@
 ## Question
 What are the different SQL strategies to deduplicate records and retain only the latest active record per business key (e.g., `cardholder_id` or `transaction_id`), and how do they perform on multi-billion row tables?
 
----
-
 ## 1. Strategy 1: Window Function `ROW_NUMBER()` (Universal & Most Versatile)
 
 Assigns an sequential rank partitioned by the business key, ordered by the modification/event timestamp descending.
@@ -39,8 +37,6 @@ WHERE
 - **Pros:** Handles multi-column tie-breakers cleanly (`ingestion_id DESC`). Returns all columns without extra joins.
 - **Cons:** Triggers an expensive distributed sort across all partition keys.
 
----
-
 ## 2. Strategy 2: `QUALIFY` Clause (Snowflake, Databricks, BigQuery, Teradata)
 
 Syntactic sugar for `ROW_NUMBER()` that filters window functions directly without requiring an explicit CTE or subquery.
@@ -58,8 +54,6 @@ QUALIFY ROW_NUMBER() OVER (
     ORDER BY updated_at DESC, ingestion_id DESC
 ) = 1;
 ```
-
----
 
 ## 3. Strategy 3: Group By `MAX(updated_at)` with Self-Join
 
@@ -88,8 +82,6 @@ INNER JOIN LatestTimestamps lt
 > [!WARNING]
 > If a single `card_id` has duplicate records with the exact same `max_updated_at`, this approach will return **duplicate rows**. Use `ROW_NUMBER()` or add unique row ID tiebreakers if exact 1-row guarantee is needed.
 
----
-
 ## 4. Strategy 4: In-Place Table Deduplication (Physical Cleanup in DWH/Lakehouse)
 
 ### A. Delta Lake / PostgreSQL / SQL Server CTE Deletion
@@ -115,8 +107,6 @@ WITH DuplicateRows AS (
 )
 DELETE FROM DuplicateRows WHERE rn > 1;
 ```
-
----
 
 ## 5. Performance Comparison Matrix
 
