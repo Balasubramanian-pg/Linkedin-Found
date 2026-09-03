@@ -3,8 +3,6 @@
 ## Question
 How do you calculate a 7-day moving average (and moving sum) on a high-volume financial transaction fact table using SQL window functions, ensuring correct handling of calendar gaps?
 
----
-
 ## 1. The Challenge of Calendar Gaps in High-Volume Tables
 
 > [!WARNING]
@@ -13,8 +11,6 @@ How do you calculate a 7-day moving average (and moving sum) on a high-volume fi
 To calculate a true **calendar 7-day moving average**, use either:
 1. `RANGE BETWEEN INTERVAL '6' DAY PRECEDING AND CURRENT ROW` (Supported in PostgreSQL, BigQuery, Snowflake, Databricks SQL).
 2. A **Date Spine (Calendar Master)** left-joined with daily aggregates (Universal ANSI SQL standard).
-
----
 
 ## 2. Approach 1: Pre-Aggregated Daily Fact Table with Date Spine (ANSI SQL Standard)
 
@@ -84,8 +80,6 @@ FROM DenseDailySales
 ORDER BY card_id, calendar_date;
 ```
 
----
-
 ## 3. Approach 2: Using `RANGE` Windowing (Databricks / Snowflake / Postgres)
 
 If your SQL engine natively supports datetime range intervals:
@@ -110,8 +104,6 @@ SELECT
     ) AS moving_avg_7d
 FROM DailyAggregates;
 ```
-
----
 
 ## 4. Query Plan & Performance Tuning on TB-Scale Tables
 1. **Pre-Aggregation (Pushdown):** Aggregating before windowing reduces the working row count by 100x to 1000x.
