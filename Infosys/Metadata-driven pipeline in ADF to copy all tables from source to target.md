@@ -144,6 +144,8 @@ The InfoWorld case study describes exactly this: comprehensive logging of start 
 
 ---
 
+<img width="1376" height="768" alt="image" src="https://github.com/user-attachments/assets/bb657bb2-6dc4-403f-87aa-235d58add937" />
+
 ## Scaling considerations
 
 ### Lookup limit and batching
