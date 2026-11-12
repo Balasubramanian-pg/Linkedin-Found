@@ -173,6 +173,8 @@ The InfoWorld architecture uses **modular child pipelines** for different transf
 
 ## Security and credential management
 
+<img width="1376" height="768" alt="image" src="https://github.com/user-attachments/assets/3f2ea5ad-9560-45b4-827a-4428c153e38e" />
+
 The control table should **never store raw passwords or connection strings**. Instead:
 
 - Use **parameterized linked services** with credentials stored in **Azure Key Vault**. The control table or a separate connection table stores the **secret name**, not the secret value.
