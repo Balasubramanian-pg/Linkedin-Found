@@ -6,6 +6,8 @@ The sections below cover the architecture, the control table design, the step-by
 
 ## Architecture overview
 
+<img width="1376" height="768" alt="image" src="https://github.com/user-attachments/assets/29dd2161-3ae7-4fc0-a552-135278957586" />
+
 The pattern has four moving parts:
 
 1. **Control table** (in Azure SQL Database or another queryable store) holds one row per table to copy, with columns for source schema, source table, target path/table, load type, watermark column, active flag, and any copy behavior settings.
