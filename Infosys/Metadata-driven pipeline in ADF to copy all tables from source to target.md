@@ -166,6 +166,9 @@ Also consider the **Copy activity’s own parallelism** settings (DIU or paralle
 
 The InfoWorld architecture uses **modular child pipelines** for different transfer types: one child pipeline for database-to-database transfers, another for file-to-storage, etc. The parent pipeline reads the metadata and delegates to the appropriate child pipeline, passing the necessary parameters. This keeps each pipeline template simple and avoids a monolithic pipeline with complex branching logic. The same case study notes that ADF’s **Switch activity is capped at 25 cases**, so for many transfer types, a categorization layer or multiple parent pipelines may be needed.
 
+<img width="1376" height="768" alt="image" src="https://github.com/user-attachments/assets/3eb67fae-6171-493b-b222-1bea686899a4" />
+
+
 ---
 
 ## Security and credential management
