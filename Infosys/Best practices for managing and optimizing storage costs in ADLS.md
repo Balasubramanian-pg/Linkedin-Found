@@ -82,6 +82,7 @@ Enabling a hierarchical namespace (which makes a storage account “ADLS Gen2”
 ---
 
 ## 7. Evaluate premium performance only when transaction volume justifies it
+<img width="1376" height="768" alt="image" src="https://github.com/user-attachments/assets/354af5d2-3b18-46f7-af6e-becb575fa7aa" />
 
 Premium block blob storage accounts (including premium ADLS) place data on SSDs, delivering lower latency and higher IOPS than standard storage. The **storage cost per GB is higher**, but **transaction costs are lower**. For workloads that execute a very high number of transactions, premium can be economical despite the higher capacity rate. Premium accounts are **not eligible** for reserved capacity, so the decision should be based on transaction intensity rather than capacity alone.
 
