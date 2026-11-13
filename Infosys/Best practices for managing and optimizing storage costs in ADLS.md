@@ -18,6 +18,7 @@ Every read, write, and list operation against ADLS is a billed transaction, and 
 ADLS Gen2 pricing trades storage cost against access cost: Hot has the highest storage cost but the lowest access cost; Cool, Cold, and Archive progressively reduce storage cost while increasing retrieval and transaction costs.
 
 ### Manual lifecycle policies
+<img width="1376" height="768" alt="image" src="https://github.com/user-attachments/assets/4093ac34-7554-4c49-b413-74a930949297" />
 
 Azure Blob lifecycle management policies automatically transition blobs between Hot, Cool, Cold, and Archive, or delete them, based on last-modified or last-accessed timestamps. A practical policy might move data to Cool after 30 days of inactivity, to Cold after an additional 60–90 days, and to Archive when it is retained only for compliance. Lifecycle policies are passive savings: once configured, they run without ongoing effort.
 
