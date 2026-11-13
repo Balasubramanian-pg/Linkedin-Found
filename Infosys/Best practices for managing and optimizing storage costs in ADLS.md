@@ -75,6 +75,7 @@ Actions:
 ---
 
 ## 6. Account for hierarchical namespace metadata overhead
+<img width="1376" height="768" alt="image" src="https://github.com/user-attachments/assets/5af32be7-117c-4be5-b915-c52d2d1f7b9d" />
 
 Enabling a hierarchical namespace (which makes a storage account “ADLS Gen2”) adds a charge for **metadata associated with the folder and directory structure**. This is typically a marginal premium relative to flat Blob storage, but it is not zero. For workloads with deep directory trees or massive numbers of directories, the metadata charge should be factored into the storage cost model. In many analytics workloads, however, the performance gains from HNS reduce compute time enough that total cost of ownership remains lower even with the metadata premium.
 
