@@ -39,6 +39,7 @@ Objects managed by smart tier pay standard Hot/Cool/Cold capacity rates **withou
 ---
 
 ## 3. Purchase reserved capacity for predictable baseline storage
+<img width="1376" height="768" alt="image" src="https://github.com/user-attachments/assets/d2c81ed9-3868-4e8e-8432-2ad75bb7b410" />
 
 Azure Storage reserved capacity provides a billing discount on capacity for block blobs and ADLS data in standard storage accounts when you commit to a **one-year or three-year** reservation. Reservations are purchased in units of **100 TiB or 1 PiB per month** and apply to Hot, Cool, or Archive tiers, with any redundancy option.
 
