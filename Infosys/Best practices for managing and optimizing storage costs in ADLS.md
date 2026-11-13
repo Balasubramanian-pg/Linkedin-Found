@@ -25,6 +25,7 @@ Azure Blob lifecycle management policies automatically transition blobs between 
 **Archive caveats.** Archive has the lowest storage cost but the highest retrieval cost and rehydration latency. Data must remain in Archive for at least **180 days**; early deletion triggers a charge for the remaining days. Archive write operations are also more expensive than Hot-tier writes. Archive is appropriate only for data that is truly rarely accessed and can tolerate retrieval delay.
 
 ### Smart tier (automated, no manual rules)
+<img width="1376" height="768" alt="image" src="https://github.com/user-attachments/assets/8d2a0996-91c3-4680-baf8-eff4bac5ecae" />
 
 Smart tier is a fully managed tiering capability for Blob Storage and Data Lake Storage that continuously evaluates per-object last-access time and moves objects across Hot, Cool, and Cold without manual lifecycle rules. The built-in behavior is:
 
