@@ -3,6 +3,7 @@ Effective cost management in Azure Data Lake Storage (ADLS) Gen2 requires a two-
 ---
 
 ## 1. Optimize file size and format to reduce both storage and transaction costs
+<img width="1376" height="768" alt="image" src="https://github.com/user-attachments/assets/34d3138c-2fce-4e06-9be6-ca66eaee009f" />
 
 Every read, write, and list operation against ADLS is a billed transaction, and read/write operations are billed in **4 MB increments** regardless of the actual file size. Millions of tiny files therefore create a double penalty: higher transaction volume and slower analytics.
 
